@@ -6,6 +6,7 @@ permissions: { contents: write, pages: write, id-token: write }
 jobs:
   render:
     runs-on: ubuntu-latest
+    environment: { name: github-pages }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -14,7 +15,8 @@ jobs:
       - run: npm install && npx playwright install --with-deps chromium
       - name: Voiceover (Google Gemini TTS) if key is set
         env: { GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}' }
-        run: if [ -n "$GEMINI_API_KEY" ]; then node tts.mjs --all; else echo 'no GEMINI_API_KEY secret: silent render'; fi
+        run: |
+          if [ -n "$GEMINI_API_KEY" ]; then node tts.mjs --all; else echo "no GEMINI_API_KEY secret - silent render"; fi
       - run: node render.mjs --all
       - uses: actions/upload-artifact@v4
         with: { name: videos, path: out/*.mp4 }
@@ -24,3 +26,4 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with: { path: site }
       - uses: actions/deploy-pages@v4
+        continue-on-error: true
