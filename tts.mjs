@@ -2,8 +2,9 @@
 // Reads every scene's `say`, synthesizes it (cached), writes voice.wav + timings.json next to video.js.
 // Env: GEMINI_API_KEY (required), GEMINI_VOICE (default Kore), GEMINI_TTS_MODEL (default gemini-2.5-flash-preview-tts)
 import fs from 'fs'; import path from 'path'; import crypto from 'crypto'; import {pathToFileURL} from 'url';
+process.on('uncaughtException',e=>{console.log('::error::'+String(e.message).replace(/\s+/g,' ').slice(0,400));process.exit(1)});process.on('unhandledRejection',e=>{console.log('::error::'+String(e&&e.message||e).replace(/\s+/g,' ').slice(0,400));process.exit(1)});
 const KEY=process.env.GEMINI_API_KEY; if(!KEY){console.error('GEMINI_API_KEY is not set');process.exit(1)}
-const VOICE=process.env.GEMINI_VOICE||'Kore', MODEL=process.env.GEMINI_TTS_MODEL||'gemini-2.5-flash-preview-tts';
+const VOICE=process.env.GEMINI_VOICE||'Kore', MODELS=process.env.GEMINI_TTS_MODEL?[process.env.GEMINI_TTS_MODEL]:['gemini-2.5-flash-preview-tts','gemini-2.5-flash-tts','gemini-2.5-pro-preview-tts'];let MODEL=MODELS[0];
 const RATE=24000, PAD=0.35, STYLE='Say in a clear, friendly, steady explainer-narrator voice: ';
 const args=process.argv.slice(2), all=args.includes('--all');
 const names=all?fs.readdirSync('videos').filter(n=>fs.existsSync(`videos/${n}/video.js`)):args.filter(a=>!a.startsWith('--'));
@@ -14,7 +15,8 @@ async function synth(text){
       body:JSON.stringify({contents:[{parts:[{text:STYLE+text}]}],generationConfig:{responseModalities:['AUDIO'],
         speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:VOICE}}}}})});
     if(r.ok){const j=await r.json();const d=j.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;if(d)return Buffer.from(d,'base64')}
-    else if(r.status!==429&&r.status<500){throw new Error(`Gemini TTS ${r.status}: ${await r.text()}`)}
+    else if(r.status===404&&MODELS.indexOf(MODEL)<MODELS.length-1){MODEL=MODELS[MODELS.indexOf(MODEL)+1];console.log('trying model',MODEL);a--;continue}
+    else if(r.status!==429&&r.status<500){throw new Error(`Gemini TTS ${r.status} (${MODEL}): ${(await r.text()).slice(0,300)}`)}
     await new Promise(r=>setTimeout(r,2000*(a+1)));
   } throw new Error('Gemini TTS failed after retries');
 }
