@@ -1,0 +1,26 @@
+name: Render videos
+on:
+  push: { branches: [main], paths: ['videos/**','engine/**','render.mjs'] }
+  workflow_dispatch:
+permissions: { contents: write, pages: write, id-token: write }
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-inter
+      - run: npm install && npx playwright install --with-deps chromium
+      - name: Voiceover (Google Gemini TTS) if key is set
+        env: { GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}' }
+        run: if [ -n "$GEMINI_API_KEY" ]; then node tts.mjs --all; else echo 'no GEMINI_API_KEY secret: silent render'; fi
+      - run: node render.mjs --all
+      - uses: actions/upload-artifact@v4
+        with: { name: videos, path: out/*.mp4 }
+      - name: Publish studio + videos to GitHub Pages
+        run: |
+          mkdir site && cp -r index.html engine videos out site/ && touch site/.nojekyll
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: site }
+      - uses: actions/deploy-pages@v4

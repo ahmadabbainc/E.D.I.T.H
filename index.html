@@ -1,0 +1,29 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Explainer Engine</title>
+<link rel="stylesheet" href="engine/style.css">
+<style>
+body{display:flex;flex-direction:column;align-items:center;justify-content:center;color:#eee;font:14px system-ui}
+#wrap{width:576px;height:1024px;transform-origin:top center}
+#ui{position:fixed;bottom:0;left:0;right:0;background:#111c;padding:10px;display:flex;gap:10px;align-items:center;z-index:9}
+#ui input[type=range]{flex:1} select,button{font:inherit;padding:4px 8px}
+body.render #ui{display:none}
+</style>
+<div id="wrap"><div id="stage"><div id="world"></div><div id="cap"></div></div></div>
+<div id="ui"><button id="play">▶</button><input id="bar" type="range" min="0" max="1000" value="0"><span id="time">0.0s</span>
+<select id="vid"></select></div>
+<script type="module">
+import {load} from './engine/player.js';
+const q=new URLSearchParams(location.search); if(q.has('render'))document.body.classList.add('render');
+const list=['browser-engines']; const sel=document.getElementById('vid');
+list.forEach(n=>sel.add(new Option(n,n))); sel.value=q.get('v')||list[0];
+sel.onchange=()=>location.search='?v='+sel.value+(q.has('render')?'&render':'');
+await load('./videos/'+sel.value+'/video.js');
+const fit=()=>{const k=q.has('render')?1:Math.min(1,(innerHeight-60)/1024);wrap.style.transform=`scale(${k})`;wrap.style.height=1024*k+'px';wrap.style.width=576*k+'px';stage.style.transformOrigin='top left';stage.style.transform=`scale(${k})`;};
+fit();addEventListener('resize',fit);
+let t=0,playing=false,last=0;const bar=document.getElementById('bar'),tm=document.getElementById('time');
+const show=()=>{seek(t);bar.value=t/TOTAL*1000;tm.textContent=t.toFixed(1)+'s / '+TOTAL.toFixed(1)+'s'};
+bar.oninput=()=>{t=bar.value/1000*TOTAL;show()};
+play.onclick=()=>{playing=!playing;play.textContent=playing?'❚❚':'▶';last=performance.now()};
+(function loop(n){if(playing){t+=(n-last)/1000;last=n;if(t>=TOTAL){t=0}show()}requestAnimationFrame(loop)})(0);
+show();
+</script>

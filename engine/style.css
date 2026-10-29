@@ -1,0 +1,29 @@
+/* THEME: edit these 6 variables to re-skin every video */
+:root{
+  --bg:#f8f4e6; --ink:#1d1d1b; --accent:#2a8a00; --accent2:#9bd400;
+  --muted:#b9b6a8; --card:#fffdf6; --font:'Inter','Poppins',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0}
+html,body{background:#222;height:100%;overflow:hidden}
+#stage{position:relative;width:576px;height:1024px;background:var(--bg);overflow:hidden;
+  font-family:var(--font);color:var(--ink);transform-origin:top left}
+#world{position:absolute;inset:0;transform-origin:0 0}
+.it{position:absolute;left:0;top:0;transform-origin:50% 50%;will-change:transform,opacity}
+.card{background:var(--card);border:2px solid var(--ink);border-radius:22%;
+  box-shadow:0 8px 0 -2px rgba(0,0,0,.09),0 14px 22px rgba(0,0,0,.08);
+  display:grid;place-items:center;align-content:center;font-size:var(--fs,48px)}
+.card img,.card svg{width:62%;height:auto;aspect-ratio:1;display:block;align-self:center}
+.label{background:var(--card);border:1.5px solid var(--ink);padding:6px 12px;text-align:center;
+  line-height:1.15;white-space:nowrap}
+.label b{display:block;font-size:19px;font-weight:700}
+.label small{display:block;font-size:11px;color:#555}
+.pill{display:flex;align-items:center;gap:6px;background:var(--card);border:1.5px solid var(--ink);
+  border-radius:9px;padding:4px 10px;font-weight:700;font-size:15px;white-space:nowrap}
+.text{font-weight:800;color:var(--ink);white-space:nowrap}
+.box3d{transform-style:preserve-3d}
+.box3d .f{position:absolute;border:2px solid var(--ink);background:var(--card)}
+#cap{position:absolute;left:30px;right:30px;bottom:150px;text-align:center;font-weight:800;
+  font-size:27px;line-height:1.2;letter-spacing:-.2px}
+#cap .w{color:var(--muted);transition:none}
+#cap .w.on{color:var(--accent)}
+#cap .w.cur{color:var(--accent)}

@@ -1,0 +1,14 @@
+{
+  "name": "explainer-engine",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Code-only explainer motion videos. Write a scene file, render to MP4.",
+  "scripts": {
+    "dev": "node serve.mjs",
+    "tts": "node tts.mjs",
+    "render": "node render.mjs",
+    "render:all": "node render.mjs --all"
+  },
+  "dependencies": { "playwright": "^1.50.0" }
+}
