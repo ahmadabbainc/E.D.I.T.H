@@ -1,1 +1,13 @@
-[{"slug":"browser-engines","title":"Why nobody builds a new web browser","topic":"browser engines"}]
+[
+ {
+  "slug": "how-does-wi-fi-work",
+  "title": "How Wi-Fi Works",
+  "topic": "How does Wi-Fi work?",
+  "created": "2026-10-29T23:50:05.416Z"
+ },
+ {
+  "slug": "browser-engines",
+  "title": "Why nobody builds a new web browser",
+  "topic": "browser engines"
+ }
+]
