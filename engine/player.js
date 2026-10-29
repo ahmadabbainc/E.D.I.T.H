@@ -1,4 +1,5 @@
 // Explainer engine: a pure function  seek(t) -> pixels.  No timers, so renders are deterministic.
+import {kit} from './kit.js';
 const E = {
   lin:t=>t, out:t=>1-Math.pow(1-t,3), inOut:t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2,
   back:t=>{const c=1.70158+1;return 1+c*Math.pow(t-1,3)+1.70158*Math.pow(t-1,2)},
@@ -36,10 +37,11 @@ export async function load(src){
   function make(it){
     const t=it.type, st=it.style||{};
     let el;
-    if(t==='card'){el=$(`<div class="card">${it.html||it.icon||''}</div>`);const z=it.size||90;
+    if(t==='card'){el=$(`<div class="card">${it.html||(it.kit?kit(it.kit):'')||it.icon||''}</div>`);const z=it.size||90;
       Object.assign(el.style,{width:z+'px',height:z+'px'});}
     else if(t==='label'){el=$(`<div class="label"><b>${it.text}</b>${it.sub?`<small>${it.sub}</small>`:''}</div>`);}
-    else if(t==='pill'){el=$(`<div class="pill">${it.icon||''}${it.text}</div>`);}
+    else if(t==='icon'){const z=it.size||90;el=$(`<div class="iconbox" style="width:${z}px;height:${z}px">${kit(it.kit)}</div>`);}
+    else if(t==='pill'){el=$(`<div class="pill">${it.kit?kit(it.kit):(it.icon||'')}${it.text}</div>`);}
     else if(t==='text'){el=$(`<div class="text" style="font-size:${it.size||40}px;color:${it.color||'var(--ink)'}">${it.text}</div>`);}
     else if(t==='svg'||t==='html'){el=$(`<div>${it.html}</div>`);}
     else if(t==='line'){el=$(`<svg width="${V.width}" height="${V.height}" style="overflow:visible"><path fill="none" stroke="${it.color||'#1d1d1b'}" stroke-width="${it.w||2}" stroke-linecap="round"/></svg>`);}
@@ -48,7 +50,7 @@ export async function load(src){
        <div class="f" style="width:${w}px;height:${d}px;transform:translateZ(${h}px)"></div>
        <div class="f" style="width:${w}px;height:${h}px;top:${d}px;transform-origin:top;transform:rotateX(-90deg);background:#ece6d2"></div>
        <div class="f" style="width:${h}px;height:${d}px;left:${w}px;transform-origin:left;transform:rotateY(90deg);background:#e0d9c0"></div></div>`);}
-    Object.assign(el.style,st); el.dataset.t=t; return el;
+    Object.assign(el.style,st); el.dataset.t=t; el.dataset.lbl=String(it.text||it.kit||it.id||t).slice(0,30); return el;
   }
   function center(o){const r=o.el.getBoundingClientRect?null:null;return {x:o.cx,y:o.cy}}
   function pos(o,t){ // keyframed position/scale/opacity: o.to = [{at,dur,x,y,scale,opacity,ease}]

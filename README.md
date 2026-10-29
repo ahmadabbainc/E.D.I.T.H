@@ -1,5 +1,7 @@
 # Explainer Engine
 
+**Web app:** open the GitHub Pages site, paste a fine-grained token once (Actions: read/write on this repo), type a topic, wait ~5 minutes, watch/download the video. Secrets needed in the repo: `GEMINI_API_KEY` (script + voice). Optional `ANTHROPIC_API_KEY` for stronger scripts.
+
 Write a scene file → get a finished explainer MP4. No video-generation tool: Claude writes JS/SVG, Chromium draws it, ffmpeg encodes it.
 
 ```

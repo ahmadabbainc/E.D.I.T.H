@@ -9,7 +9,7 @@ const server=await serve(5199); const browser=await chromium.launch();
 for(const name of names){
   const page=await browser.newPage({viewport:{width:576,height:1024}});
   page.on('pageerror',e=>{console.error(e);process.exit(1)});
-  await page.goto(`http://localhost:5199/index.html?v=${name}&render`); await page.waitForFunction(()=>window.TOTAL);
+  await page.goto(`http://localhost:5199/studio.html?v=${name}&render`); await page.waitForFunction(()=>window.TOTAL);
   await page.evaluate(()=>document.fonts.ready);
   const {total,fps}=await page.evaluate(()=>({total:TOTAL,fps:FPS})); const n=Math.ceil(total*fps);
   const dir=`videos/${name}`; const audio=['voice.mp3','voice.wav','voice.m4a'].map(f=>`${dir}/${f}`).find(fs.existsSync);

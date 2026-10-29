@@ -1,29 +1,114 @@
-<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Explainer Engine</title>
-<link rel="stylesheet" href="engine/style.css">
 <style>
-body{display:flex;flex-direction:column;align-items:center;justify-content:center;color:#eee;font:14px system-ui}
-#wrap{width:576px;height:1024px;transform-origin:top center}
-#ui{position:fixed;bottom:0;left:0;right:0;background:#111c;padding:10px;display:flex;gap:10px;align-items:center;z-index:9}
-#ui input[type=range]{flex:1} select,button{font:inherit;padding:4px 8px}
-body.render #ui{display:none}
-</style>
-<div id="wrap"><div id="stage"><div id="world"></div><div id="cap"></div></div></div>
-<div id="ui"><button id="play">▶</button><input id="bar" type="range" min="0" max="1000" value="0"><span id="time">0.0s</span>
-<select id="vid"></select></div>
-<script type="module">
-import {load} from './engine/player.js';
-const q=new URLSearchParams(location.search); if(q.has('render'))document.body.classList.add('render');
-const list=['browser-engines']; const sel=document.getElementById('vid');
-list.forEach(n=>sel.add(new Option(n,n))); sel.value=q.get('v')||list[0];
-sel.onchange=()=>location.search='?v='+sel.value+(q.has('render')?'&render':'');
-await load('./videos/'+sel.value+'/video.js');
-const fit=()=>{const k=q.has('render')?1:Math.min(1,(innerHeight-60)/1024);wrap.style.transform=`scale(${k})`;wrap.style.height=1024*k+'px';wrap.style.width=576*k+'px';stage.style.transformOrigin='top left';stage.style.transform=`scale(${k})`;};
-fit();addEventListener('resize',fit);
-let t=0,playing=false,last=0;const bar=document.getElementById('bar'),tm=document.getElementById('time');
-const show=()=>{seek(t);bar.value=t/TOTAL*1000;tm.textContent=t.toFixed(1)+'s / '+TOTAL.toFixed(1)+'s'};
-bar.oninput=()=>{t=bar.value/1000*TOTAL;show()};
-play.onclick=()=>{playing=!playing;play.textContent=playing?'❚❚':'▶';last=performance.now()};
-(function loop(n){if(playing){t+=(n-last)/1000;last=n;if(t>=TOTAL){t=0}show()}requestAnimationFrame(loop)})(0);
-show();
-</script>
+:root{--bg:#f8f4e6;--ink:#1d1d1b;--card:#fffdf6;--accent:#2a8a00;--accent2:#9bd400;--muted:#6f6c60;--line:#e3dec9}
+@media(prefers-color-scheme:dark){:root{--bg:#161611;--ink:#f1eedf;--card:#201f18;--muted:#a7a48f;--line:#35332a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 Inter,system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:30px;letter-spacing:-.8px;margin:12px 0 4px}h1 span{color:var(--accent)}
+.sub{color:var(--muted);margin:0 0 20px}
+.card{background:var(--card);border:1.5px solid var(--ink);border-radius:18px;padding:16px;margin:14px 0;box-shadow:0 5px 0 -1px rgba(0,0,0,.08)}
+.card h2{font-size:15px;margin:0 0 10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)}
+textarea,input,select{width:100%;font:inherit;color:inherit;background:var(--bg);border:1.5px solid var(--ink);border-radius:12px;padding:12px}
+textarea{min-height:84px;resize:vertical}
+.row{display:flex;gap:10px;margin-top:10px}.row>*{flex:1}
+button{font:inherit;font-weight:700;border:1.5px solid var(--ink);border-radius:12px;padding:13px 16px;background:var(--accent);color:#fff;cursor:pointer}
+button.ghost{background:transparent;color:var(--ink)}button:disabled{opacity:.5}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.chip{font-size:13px;padding:6px 10px;border:1.5px solid var(--line);border-radius:99px;background:transparent;color:var(--ink);font-weight:500}
+ol{padding-left:20px;margin:6px 0}li{margin:6px 0}a{color:var(--accent)}code{background:var(--bg);padding:1px 6px;border-radius:6px;border:1px solid var(--line);font-size:13px}
+.msg{margin-top:10px;font-size:14px}.err{color:#c0262d}.ok{color:var(--accent)}
+.run{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)}.run:first-of-type{border-top:0}
+.dot{width:12px;height:12px;border-radius:50%;margin-top:6px;flex:none;background:var(--muted)}
+.dot.go{background:var(--accent2);animation:p 1s infinite alternate}.dot.good{background:var(--accent)}.dot.bad{background:#e0343c}
+@keyframes p{to{transform:scale(1.5);opacity:.5}}
+.run b{display:block}.steps{font-size:13px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}
+.vid{background:var(--card);border:1.5px solid var(--ink);border-radius:16px;overflow:hidden}
+.vid video{width:100%;aspect-ratio:9/16;background:#000;display:block;object-fit:cover}
+.vid div{padding:10px 12px;font-size:14px}.vid b{display:block;margin-bottom:2px}.vid small{color:var(--muted)}
+.hidden{display:none}details summary{cursor:pointer;font-weight:600}
+</style></head><body><main>
+<h1>Explainer <span>Engine</span></h1>
+<p class="sub">Type a topic. AI writes the script, a voice reads it, the engine draws and renders the video.</p>
+
+<section class="card" id="setup">
+  <h2>One-time setup (2 minutes)</h2>
+  <ol>
+    <li>Open <a id="tokenlink" target="_blank" rel="noopener">GitHub → New fine-grained token</a>.</li>
+    <li>Repository access: <b>Only select repositories</b> → <code id="repoName"></code>.</li>
+    <li>Permissions → <b>Actions: Read and write</b>. Generate the token and paste it here:</li>
+  </ol>
+  <input id="token" type="password" placeholder="github_pat_…" autocomplete="off">
+  <div class="row"><button id="saveToken">Save token</button></div>
+  <p class="msg" style="color:var(--muted)">The token stays in this browser only (local storage). It can only start and read workflows in this one repo.</p>
+</section>
+
+<section class="card" id="create">
+  <h2>New video</h2>
+  <textarea id="topic" placeholder="e.g. How does Wi-Fi actually work?"></textarea>
+  <div class="chips" id="chips"></div>
+  <div class="row">
+    <select id="seconds"><option value="30">~30 sec</option><option value="45">~45 sec</option><option value="60" selected>~60 sec</option><option value="90">~90 sec</option><option value="120">~2 min</option></select>
+    <select id="voice"></select>
+  </div>
+  <div class="row"><button id="go">Generate video</button><button class="ghost" id="forget" style="flex:0 0 auto">Token</button></div>
+  <p class="msg" id="msg"></p>
+</section>
+
+<section class="card hidden" id="runsCard"><h2>Progress</h2><div id="runs"></div></section>
+
+<h2 style="font-size:15px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:26px 0 10px">Library</h2>
+<div class="grid" id="lib"><p class="sub">Loading…</p></div>
+<p class="sub" style="margin-top:26px"><a href="studio.html">Open the studio</a> (scrub timeline, preview any video in the browser)</p>
+</main>
+<script>
+const REPO=(()=>{const h=location.hostname,m=h.match(/^(.+)\.github\.io$/);const p=location.pathname.split('/')[1];return m&&p?`${m[1]}/${decodeURIComponent(p)}`:'ahmadabbainc/E.D.I.T.H'})();
+const API='https://api.github.com/repos/'+REPO, $=id=>document.getElementById(id);
+const store={get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}},del:k=>{try{localStorage.removeItem(k)}catch(e){}}};
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let token=store.get('ee_token')||'';
+const gh=(path,opt={})=>fetch(path.startsWith('http')?path:API+path,{...opt,headers:{Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28',...(token?{Authorization:'Bearer '+token}:{}),...(opt.headers||{})}});
+$('repoName').textContent=REPO.split('/')[1];
+$('tokenlink').href='https://github.com/settings/personal-access-tokens/new';
+const VOICES=[['Kore','Kore · firm'],['Puck','Puck · upbeat'],['Charon','Charon · informative'],['Fenrir','Fenrir · excitable'],['Aoede','Aoede · breezy'],['Leda','Leda · youthful'],['Zephyr','Zephyr · bright'],['Orus','Orus · firm']];
+VOICES.forEach(([v,l])=>$('voice').add(new Option(l,v))); $('voice').value=store.get('ee_voice')||'Kore';
+['How does Wi-Fi work?','Why is the sky blue?','How do noise-cancelling headphones work?','What is a blockchain?','How does GPS know where you are?'].forEach(t=>{const b=document.createElement('button');b.className='chip';b.textContent=t;b.onclick=()=>{$('topic').value=t};$('chips').append(b)});
+function refreshUI(){const has=!!token;$('setup').classList.toggle('hidden',has);$('create').classList.toggle('hidden',!has)}
+$('saveToken').onclick=()=>{const t=$('token').value.trim();if(!t)return;token=t;store.set('ee_token',t);$('token').value='';refreshUI();poll()};
+$('forget').onclick=()=>{if(confirm('Remove the saved token from this browser?')){store.del('ee_token');token='';refreshUI()}};
+$('go').onclick=async()=>{
+  const topic=$('topic').value.trim(),msg=$('msg');msg.className='msg';
+  if(topic.length<4){msg.textContent='Type a topic first.';msg.classList.add('err');return}
+  $('go').disabled=true;msg.textContent='Starting…';store.set('ee_voice',$('voice').value);
+  try{
+    const r=await gh('/actions/workflows/generate.yml/dispatches',{method:'POST',body:JSON.stringify({ref:'main',inputs:{topic,seconds:$('seconds').value,voice:$('voice').value}})});
+    if(r.status===204){msg.textContent='Started. This takes about 3-6 minutes; progress appears below.';msg.classList.add('ok');$('topic').value='';setTimeout(poll,4000)}
+    else{const t=await r.text();msg.classList.add('err');msg.textContent=r.status===401||r.status===403||r.status===404?'GitHub refused: the token needs "Actions: Read and write" on this repo (or it expired). Use the Token button to replace it.':`Error ${r.status}: ${t.slice(0,160)}`}
+  }catch(e){msg.classList.add('err');msg.textContent='Network error: '+e.message}
+  $('go').disabled=false};
+const STEP=['AI writes script','Voiceover','Render','Publish'];
+async function runs(){
+  const r=await gh('/actions/workflows/generate.yml/runs?per_page=4');if(!r.ok)return false;const j=await r.json();
+  const list=j.workflow_runs||[];$('runsCard').classList.toggle('hidden',!list.length);let busy=false;
+  const html=await Promise.all(list.map(async run=>{
+    const going=run.status!=='completed';busy=busy||going;let steps='';
+    if(going){try{const jb=await (await gh(`/actions/runs/${run.id}/jobs`)).json();const st=(jb.jobs?.[0]?.steps||[]).filter(s=>/^\d\./.test(s.name));
+      steps=STEP.map((n,i)=>{const s=st[i];return (s?.conclusion==='success'?'✓ ':s?.status==='in_progress'?'… ':'· ')+n}).join('  ')}catch(e){}}
+    const cls=going?'go':run.conclusion==='success'?'good':'bad';
+    const label=going?'Working…':run.conclusion==='success'?'Done':'Failed';
+    return `<div class="run"><span class="dot ${cls}"></span><div><b>${esc((run.display_title||'').replace(/^Generate: /,''))}</b><span class="steps">${label} · ${new Date(run.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}${steps?'<br>'+steps:''} · <a href="${run.html_url}" target="_blank" rel="noopener">details</a></span></div></div>`}));
+  $('runs').innerHTML=html.join('');return busy}
+async function library(){
+  let r;try{r=await gh('/releases?per_page=40')}catch(e){$('lib').innerHTML='<p class="sub">Offline or blocked. Retrying…</p>';return}if(!r.ok){$('lib').innerHTML='<p class="sub">Could not load videos.</p>';return}
+  const vids=(await r.json()).filter(x=>x.tag_name.startsWith('video-'));
+  if(!vids.length){$('lib').innerHTML='<p class="sub">No videos yet. Make the first one above.</p>';return}
+  $('lib').innerHTML=vids.map(v=>{const mp4=v.assets.find(a=>a.name.endsWith('.mp4')),jpg=v.assets.find(a=>a.name.endsWith('.jpg'));if(!mp4)return '';
+    const voiced=/voice: voiced/.test(v.body||'');
+    return `<div class="vid"><video controls preload="none" playsinline ${jpg?`poster="${jpg.browser_download_url}"`:''} src="${mp4.browser_download_url}"></video><div><b>${esc(v.name)}</b><small>${voiced?'with voice':'silent'} · <a href="${mp4.browser_download_url}" download>download</a></small></div></div>`}).join('')}
+let timer;async function poll(){clearTimeout(timer);let busy=false;try{busy=await runs()}catch(e){}if(!busy)library();timer=setTimeout(poll,busy?7000:60000)}
+refreshUI();poll();
+</script></body></html>

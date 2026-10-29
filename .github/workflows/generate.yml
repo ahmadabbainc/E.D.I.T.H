@@ -1,0 +1,53 @@
+name: Generate video
+run-name: "Generate: ${{ inputs.topic }}"
+on:
+  workflow_dispatch:
+    inputs:
+      topic:   { description: "Topic of the explainer", required: true, type: string }
+      seconds: { description: "Target length in seconds", default: "60", type: string }
+      voice:   { description: "Gemini voice name", default: "Kore", type: string }
+permissions: { contents: write }
+concurrency: { group: generate, cancel-in-progress: false }
+jobs:
+  make:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GEMINI_VOICE: ${{ inputs.voice }}
+      TOPIC: ${{ inputs.topic }}
+      SECS: ${{ inputs.seconds }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-inter
+      - run: npm install && npx playwright install --with-deps chromium
+      - name: 1. AI writes the script
+        id: script
+        run: node generate.mjs "$TOPIC" --seconds "$SECS"
+      - name: 2. Voiceover (Google Gemini TTS)
+        id: voice
+        continue-on-error: true
+        run: node tts.mjs "${{ steps.script.outputs.slug }}"
+      - name: 3. Render video
+        run: |
+          node render.mjs "${{ steps.script.outputs.slug }}"
+          ffmpeg -v error -ss 1.5 -i "out/${{ steps.script.outputs.slug }}.mp4" -frames:v 1 -vf scale=360:-1 -q:v 3 "out/${{ steps.script.outputs.slug }}.jpg" -y
+      - name: 4. Publish release + save script
+        env:
+          SLUG: ${{ steps.script.outputs.slug }}
+          TITLE: ${{ steps.script.outputs.title }}
+        run: |
+          VOICE=$([ "${{ steps.voice.outcome }}" = "success" ] && echo voiced || echo silent)
+          gh release create "video-$SLUG-$GITHUB_RUN_NUMBER" "out/$SLUG.mp4" "out/$SLUG.jpg" \
+            --title "$TITLE" --notes "topic: $TOPIC
+          voice: $VOICE
+          seconds: $SECS"
+          git config user.name "explainer-bot"; git config user.email "bot@users.noreply.github.com"
+          git add "videos/$SLUG" videos.json
+          git commit -m "Add video: $TITLE" || true
+          git pull --rebase -q origin main || true
+          git push || true

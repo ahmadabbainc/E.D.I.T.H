@@ -1,6 +1,6 @@
 name: Render videos
 on:
-  push: { branches: [main], paths: ['videos/**','engine/**','render.mjs'] }
+  push: { branches: [main], paths: ['index.html','studio.html','engine/**','render.mjs'] }
   workflow_dispatch:
 permissions: { contents: write, pages: write, id-token: write }
 jobs:
@@ -18,12 +18,12 @@ jobs:
         env: { GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}' }
         run: |
           if [ -n "$GEMINI_API_KEY" ]; then node tts.mjs --all; else echo "no GEMINI_API_KEY secret - silent render"; fi
-      - run: node render.mjs --all
+      - run: node render.mjs browser-engines
       - uses: actions/upload-artifact@v4
         with: { name: videos, path: out/*.mp4 }
       - name: Publish studio + videos to GitHub Pages
         run: |
-          mkdir site && cp -r index.html engine videos out site/ && touch site/.nojekyll
+          mkdir site && cp -r index.html studio.html videos.json engine videos out site/ && touch site/.nojekyll
       - uses: actions/upload-pages-artifact@v3
         with: { path: site }
       - uses: actions/deploy-pages@v4
