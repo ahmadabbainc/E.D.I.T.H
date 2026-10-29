@@ -1,7 +1,7 @@
 // node generate.mjs "How DNS works" [--seconds 60] [--slug my-slug] [--mock file.json]
 // Topic -> AI writes the scene JSON -> validate -> lint layout -> auto-repair -> videos/<slug>/video.js
 // Needs GEMINI_API_KEY (default) or ANTHROPIC_API_KEY (better scripts, used first if present).
-import fs from 'fs'; import {lint} from './lint.mjs'; import {KIT_NAMES} from './engine/kit.js';
+import fs from 'fs'; import {lint} from './lint.mjs'; import {KIT_NAMES} from './engine/kit.js'; import {textModels,modelNames} from './gemini.mjs';
 const argv=process.argv.slice(2); const flag=(n,d)=>{const i=argv.indexOf('--'+n);return i>=0?argv[i+1]:d};
 const topic=argv.find((a,i)=>!a.startsWith('--')&&!(argv[i-1]||'').startsWith('--'))||''; if(!topic){console.error('usage: node generate.mjs "topic"');process.exit(1)}
 const seconds=Math.max(20,Math.min(150,+flag('seconds',60))), nScenes=Math.round(seconds/3.6);
@@ -54,15 +54,17 @@ async function ask(messages){ // messages: [{role,content}]
     return j.content.map(c=>c.text||'').join('');
   }
   const key=process.env.GEMINI_API_KEY; if(!key) throw new Error('Set GEMINI_API_KEY (or ANTHROPIC_API_KEY) as a repository secret');
-  const models=process.env.GEMINI_TEXT_MODEL?[process.env.GEMINI_TEXT_MODEL]:['gemini-2.5-flash','gemini-2.5-pro','gemini-2.0-flash'];
+  const models=process.env.GEMINI_TEXT_MODEL?[process.env.GEMINI_TEXT_MODEL]:await textModels(key);
+  if(!models.length) throw new Error('No usable Gemini text model. Available: '+await modelNames(key));
+  console.log('text models to try:',models.join(', '));
   let last;
   for(const m of models){
     try{
       const j=await post(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`,{'x-goog-api-key':key},
         {systemInstruction:{parts:[{text:SPEC}]},contents:messages.map(x=>({role:x.role==='assistant'?'model':'user',parts:[{text:x.content}]})),
          generationConfig:{responseMimeType:'application/json',temperature:0.8,maxOutputTokens:30000}});
-      const t=j.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join(''); if(t)return t; last=new Error('empty response from '+m);
-    }catch(e){last=e; if(!/ 404|not found/i.test(e.message))throw e}
+      const t=j.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join(''); if(t){console.log('using',m);return t} last=new Error('empty response from '+m);
+    }catch(e){last=new Error(`${m}: ${e.message}`); console.log('model failed:',last.message.slice(0,200))}
   } throw last;
 }
 const parse=t=>{t=t.trim().replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();const a=t.indexOf('{'),b=t.lastIndexOf('}');return JSON.parse(t.slice(a,b+1))};
