@@ -5,7 +5,7 @@ import {ttsModels,modelNames} from './gemini.mjs'; import fs from 'fs'; import p
 process.on('uncaughtException',e=>{console.log('::error::'+String(e.message).replace(/\s+/g,' ').slice(0,400));process.exit(1)});process.on('unhandledRejection',e=>{console.log('::error::'+String(e&&e.message||e).replace(/\s+/g,' ').slice(0,400));process.exit(1)});
 const KEY=process.env.GEMINI_API_KEY; if(!KEY){console.error('GEMINI_API_KEY is not set');process.exit(1)}
 const VOICE=process.env.GEMINI_VOICE||'Kore', MODELS=process.env.GEMINI_TTS_MODEL?[process.env.GEMINI_TTS_MODEL]:await ttsModels(KEY);if(!MODELS.length)throw new Error('No Gemini TTS model available. Models: '+await modelNames(KEY));console.log('tts models:',MODELS.join(', '));let MODEL=MODELS[0];
-const RATE=24000, PAD=0.35, STYLE='Say in a clear, friendly, steady explainer-narrator voice: ';
+const RATE=24000, PAD=0.35, STYLE=process.env.GEMINI_STYLE?process.env.GEMINI_STYLE.trim()+' ':'';
 const args=process.argv.slice(2), all=args.includes('--all');
 const names=all?fs.readdirSync('videos').filter(n=>fs.existsSync(`videos/${n}/video.js`)):args.filter(a=>!a.startsWith('--'));
 async function synth(text){
@@ -33,12 +33,21 @@ for(const name of names){
   const parts=[], timings=[];
   for(const [i,s] of V.scenes.entries()){
     const text=(s.say||'').trim(); let pcm=Buffer.alloc(0);
-    if(text){const f=`${cache}/${crypto.createHash('md5').update(VOICE+MODEL+text).digest('hex')}.pcm`;
-      if(!fs.existsSync(f)){console.log(`scene ${i+1}: synthesizing`);fs.writeFileSync(f,await synth(text))}
+    if(text){const f=`${cache}/${crypto.createHash('md5').update(VOICE+text).digest('hex')}.pcm`;
+      if(!fs.existsSync(f)){
+        const words=text.split(/\s+/).length, expect=Math.max(1.5,words/2.6); let best=null;
+        for(let k=0;k<3;k++){ // the model sometimes rambles or reads extra text: keep the shortest of up to 3 takes
+          const p=await synth(text), d=p.length/2/RATE; if(!best||d<best.d)best={p,d};
+          if(d<=expect*1.45+0.8)break; console.log(`scene ${i+1}: take ${k+1} is ${d.toFixed(1)}s vs ~${expect.toFixed(1)}s expected, retrying`);
+        }
+        let p=best.p; const cap=Math.round((expect*2.2+1)*RATE)*2;
+        if(p.length>cap){console.log(`scene ${i+1}: still too long (${best.d.toFixed(1)}s), trimming`);p=p.subarray(0,cap);const f2=Math.round(.15*RATE);for(let q=0;q<f2;q++){const o=p.length-2-q*2;p.writeInt16LE(Math.round(p.readInt16LE(o)*q/f2),o)}}
+        fs.writeFileSync(f,p);
+      }
       pcm=fs.readFileSync(f);}
     const pad=Buffer.alloc(Math.round(PAD*RATE)*2); parts.push(pcm,pad);
     timings.push(+((pcm.length+pad.length)/2/RATE).toFixed(3));
   }
   fs.writeFileSync(`${dir}/voice.wav`,wav(Buffer.concat(parts))); fs.writeFileSync(`${dir}/timings.json`,JSON.stringify(timings));
-  console.log(`${name}: voice.wav + timings.json (${timings.reduce((a,b)=>a+b,0).toFixed(1)}s)`);
+  const tot=timings.reduce((a,b)=>a+b,0).toFixed(1);console.log(`${name}: voice.wav + timings.json (${tot}s)`);console.log(`::notice::voice ${tot}s for ${timings.length} scenes, models: ${MODELS.join(' ')}`);
 }

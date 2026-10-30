@@ -16,8 +16,8 @@ for(const name of names){
   const music=['music.mp3','music.wav'].map(f=>`${dir}/${f}`).find(fs.existsSync);
   const tmp=`out/${name}.tmp.mp4`, ff=['-y','-v','error','-f','image2pipe','-framerate',String(fps),'-c:v','mjpeg','-i','-'];
   if(audio)ff.push('-i',audio); if(music)ff.push('-stream_loop','-1','-i',music);
-  if(audio&&music)ff.push('-filter_complex','[2:a]volume=0.12[m];[1:a][m]amix=inputs=2:duration=first[a]','-map','0:v','-map','[a]');
-  else if(audio||music)ff.push('-map','0:v','-map','1:a','-af','volume='+(audio?1:0.5));
+  if(audio&&music)ff.push('-filter_complex','[2:a]volume=0.12[m];[1:a][m]amix=inputs=2:duration=first,loudnorm=I=-16:TP=-1.5:LRA=11[a]','-map','0:v','-map','[a]');
+  else if(audio||music)ff.push('-map','0:v','-map','1:a','-af',audio?'loudnorm=I=-16:TP=-1.5:LRA=11':'volume=0.5');
   ff.push('-c:v','libx264','-preset','veryfast','-crf','18','-pix_fmt','yuv420p','-r',String(fps),'-c:a','aac','-b:a','160k','-t',String(total),'-movflags','+faststart',tmp);
   const p=spawn('ffmpeg',ff,{stdio:['pipe','inherit','inherit']});
   for(let i=0;i<n;i++){
