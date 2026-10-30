@@ -13,7 +13,7 @@ async function get(url,tries=3){
   } return null;
 }
 async function search(term,prefixes){
-  const r=await get(`${API}/search?query=${encodeURIComponent(term)}&limit=48&prefixes=${prefixes.join(',')}`); if(!r)return [];
+  const r=await get(`${API}/search?query=${encodeURIComponent(term)}&limit=48${prefixes.length?'&prefixes='+prefixes.join(','):''}`); if(!r)return [];
   const j=await r.json().catch(()=>({})); const want=term.toLowerCase().trim().replace(/\s+/g,'-');
   return (j.icons||[]).map((id,i)=>{const [p,n]=id.split(':');const tier=prefixes.indexOf(p);
     return {id,p,n,score:(tier<0?99:tier)*100+(n===want?-50:n.startsWith(want)?-25:n.includes(want)?-10:0)+i*0.1}}).sort((a,b)=>a.score-b.score);
@@ -28,7 +28,7 @@ let counter=0;
 export async function resolveIcon(terms,{brand=false}={}){
   terms=(Array.isArray(terms)?terms:[terms]).map(t=>String(t||'').trim().toLowerCase()).filter(Boolean).slice(0,4);
   const key=(brand?'b:':'t:')+terms.join('|'); if(cache.has(key))return cache.get(key);
-  const tiers=brand?[BRAND,COLORED,MONO]:[COLORED,MONO]; let hit=null;
+  const tiers=brand?[BRAND,COLORED,MONO,[]]:[COLORED,MONO,[]]; let hit=null;
   outer: for(const tier of tiers) for(const t of terms){
     const res=await search(t,tier); if(!res.length)continue;
     for(const c of res.slice(0,3)){
@@ -39,17 +39,28 @@ export async function resolveIcon(terms,{brand=false}={}){
   }
   cache.set(key,hit); return hit;
 }
-// Fill item.svg for every icon/card item that has find/brand. Returns a human-readable report.
-export async function resolveAll(video){
+// Fill item.svg for every icon/card item that has find/brand. alts = {term:[synonyms]} from the AI rescue pass.
+// Returns {report, missing:[{it,terms}]}; unresolved items keep their find list.
+export async function resolveAll(video,alts={}){
   const jobs=[]; for(const s of video.scenes) for(const it of s.items){
-    if((it.type==='icon'||it.type==='card')&&(it.find||it.brand)) jobs.push(it);
+    if((it.type==='icon'||it.type==='card')&&(it.find||it.brand)&&!it.svg) jobs.push(it);
   }
-  const report=[]; let i=0;
+  const report=[],missing=[]; let i=0;
   async function worker(){while(i<jobs.length){const it=jobs[i++];
-    const terms=it.brand?[it.brand,...(it.find||[])]:it.find; const hit=await resolveIcon(terms,{brand:!!it.brand});
-    if(hit){it.svg=uniq(hit.svg,++counter); if(hit.mono)it.mono=true; report.push(`${terms[0]}→${hit.id}`)}
-    else{ report.push(`${terms[0]}→MISSING`); if(!it.kit)it.kit='question' }
-    delete it.find; delete it.brand;
+    const base=it.brand?[it.brand,...(it.find||[])]:[...(it.find||[])];
+    const extra=base.flatMap(t=>alts[String(t).toLowerCase()]||[]);
+    const terms=[...base,...extra].slice(0,8); const hit=await resolveIcon(terms,{brand:!!it.brand});
+    if(hit){it.svg=uniq(hit.svg,++counter); if(hit.mono)it.mono=true; report.push(`${base[0]}→${hit.id}`); delete it.find; delete it.brand}
+    else{ report.push(`${base[0]}→MISSING`); missing.push({it,terms:base}) }
   }}
-  await Promise.all(Array.from({length:5},worker)); return report;
+  await Promise.all(Array.from({length:5},worker)); return {report,missing};
+}
+// Last resort: show the word as a clean label instead of a wrong picture.
+export function labelFallback(video){
+  let n=0; for(const s of video.scenes) for(const it of s.items){
+    if((it.type==='icon'||it.type==='card')&&!it.svg&&(it.find||it.brand)){
+      const w=String((it.brand||it.find[0])||'').replace(/\b\w/g,c=>c.toUpperCase()).slice(0,18);
+      it.type='label'; it.text=w; delete it.size; delete it.find; delete it.brand; delete it.kit; n++;
+    }
+  } return n;
 }

@@ -1,11 +1,11 @@
 // node generate.mjs "How DNS works" [--seconds 60] [--slug my-slug] [--mock file.json]
 // Topic -> AI writes the scene JSON -> validate -> lint layout -> auto-repair -> videos/<slug>/video.js
 // Needs GEMINI_API_KEY (default) or ANTHROPIC_API_KEY (better scripts, used first if present).
-import fs from 'fs'; import {lint} from './lint.mjs'; import {KIT_NAMES} from './engine/kit.js'; import {textModels,modelNames} from './gemini.mjs'; import {resolveAll} from './icons.mjs';
+import fs from 'fs'; import {lint} from './lint.mjs'; import {KIT_NAMES} from './engine/kit.js'; import {textModels,modelNames} from './gemini.mjs'; import {resolveAll,labelFallback} from './icons.mjs';
 const argv=process.argv.slice(2); const flag=(n,d)=>{const i=argv.indexOf('--'+n);return i>=0?argv[i+1]:d};
 const topic=argv.find((a,i)=>!a.startsWith('--')&&!(argv[i-1]||'').startsWith('--'))||''; if(!topic){console.error('usage: node generate.mjs "topic"');process.exit(1)}
 const seconds=Math.max(20,Math.min(150,+flag('seconds',60))), nScenes=Math.round(seconds/3.6);
-let iconReport=[],usedModel=process.env.ANTHROPIC_API_KEY?'claude':'';const T0=Date.now();
+let iconSecs=0,iconReport=[],usedModel=process.env.ANTHROPIC_API_KEY?'claude':'';const T0=Date.now();
 const fail=m=>{console.log('::error::'+String(m).replace(/\s+/g,' ').slice(0,500));process.exit(1)};
 process.on('uncaughtException',e=>fail(e.message)); process.on('unhandledRejection',e=>fail(e&&e.message||e));
 
@@ -50,11 +50,11 @@ async function post(url,headers,body){
     throw new Error(`LLM ${r.status}: ${t.slice(0,300)}`);
   } throw new Error('LLM failed after retries');
 }
-async function ask(messages){ // messages: [{role,content}]
+async function ask(messages,SYS=SPEC){ // messages: [{role,content}]
   if(flag('mock')) return fs.readFileSync(flag('mock'),'utf8');
   if(process.env.ANTHROPIC_API_KEY){
     const j=await post('https://api.anthropic.com/v1/messages',{'x-api-key':process.env.ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01'},
-      {model:process.env.ANTHROPIC_MODEL||'claude-sonnet-5-5',max_tokens:16000,system:SPEC,messages});
+      {model:process.env.ANTHROPIC_MODEL||'claude-sonnet-5-5',max_tokens:16000,system:SYS,messages});
     return j.content.map(c=>c.text||'').join('');
   }
   const key=process.env.GEMINI_API_KEY; if(!key) throw new Error('Set GEMINI_API_KEY (or ANTHROPIC_API_KEY) as a repository secret');
@@ -65,7 +65,7 @@ async function ask(messages){ // messages: [{role,content}]
   for(const m of models){
     try{
       const j=await post(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`,{'x-goog-api-key':key},
-        {systemInstruction:{parts:[{text:SPEC}]},contents:messages.map(x=>({role:x.role==='assistant'?'model':'user',parts:[{text:x.content}]})),
+        {systemInstruction:{parts:[{text:SYS}]},contents:messages.map(x=>({role:x.role==='assistant'?'model':'user',parts:[{text:x.content}]})),
          generationConfig:{responseMimeType:'application/json',temperature:0.8,maxOutputTokens:30000}});
       const t=j.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join(''); if(t){console.log('using',m);usedModel=m;return t} last=new Error('empty response from '+m);
     }catch(e){last=new Error(`${m}: ${e.message}`); console.log('model failed:',last.message.slice(0,200))}
@@ -112,7 +112,16 @@ for(let round=0;round<3;round++){
   console.log(round?`repair round ${round}`:'writing script…');
   const raw=await ask(messages); messages.push({role:'assistant',content:raw});
   try{v=normalize(parse(raw))}catch(e){messages.push({role:'user',content:`That was not usable (${e.message}). Return ONLY the corrected, complete JSON object.`});continue}
-  const rep=await resolveAll(v); iconReport=rep; write(slug,v); issues=await lint(slug);
+  const tI=Date.now(); let {report:rep,missing}=await resolveAll(v);
+  if(missing.length){ // rescue: ask the AI for synonyms that exist as icons, then search again
+    try{const names=[...new Set(missing.map(m=>m.terms[0]))];
+      const raw=await ask([{role:'user',content:`For each object, give 4 alternative icon search words that surely exist as an emoji or simple icon: concrete visible nouns, synonyms, a close visual stand-in or the broader category (e.g. "cannon" -> ["artillery","gun","bomb","firework"]). Return ONLY JSON like {"cannon":["artillery","gun","bomb","firework"]}. Objects: ${JSON.stringify(names)}`}],'You help find icons. Output only JSON.');
+      const alts=Object.fromEntries(Object.entries(parse(raw)).map(([k,a])=>[k.toLowerCase(),(Array.isArray(a)?a:[a]).map(String).slice(0,5)]));
+      const r2=await resolveAll(v,alts); rep=[...rep.filter(x=>!x.endsWith('MISSING')),...r2.report]; missing=r2.missing;
+    }catch(e){console.log('icon rescue failed:',e.message)}
+  }
+  const lab=labelFallback(v); if(lab)rep.push(`${lab} shown as text labels`); iconReport=rep; iconSecs=Math.round((Date.now()-tI)/1000);
+  write(slug,v); issues=await lint(slug);
   console.log(`${v.scenes.length} scenes, ${issues.length} layout issues`);
   if(!issues.length)break;
   if(round<2) messages.push({role:'user',content:`A layout check found these problems. Fix them by moving or resizing items, then return the COMPLETE corrected JSON object only:\n${issues.slice(0,25).join('\n')}`});
@@ -122,6 +131,6 @@ if(issues.length) console.log('remaining issues:\n'+issues.join('\n'));
 const list=fs.existsSync('videos.json')?JSON.parse(fs.readFileSync('videos.json','utf8')):[];
 fs.writeFileSync('videos.json',JSON.stringify([{slug,title:v.title,topic,created:new Date().toISOString()},...list.filter(x=>x.slug!==slug)],null,1));
 console.log(`done: videos/${slug}/video.js — "${v.title}"`);
-console.log(`::notice::icons: ${iconReport.join(', ').slice(0,900)}`);
+console.log(`::notice::icons (${iconSecs}s last round): ${iconReport.join(', ').slice(0,900)}`);
 console.log(`::notice::script: ${v.scenes.length} scenes, ${issues.length} layout issues left, model ${usedModel||'mock'}, ${Math.round((Date.now()-T0)/1000)}s`);
 if(process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT,`slug=${slug}\ntitle=${v.title.replace(/[\r\n]+/g,' ')}\n`);
