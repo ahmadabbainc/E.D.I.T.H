@@ -104,7 +104,7 @@ async function runs(){
   $('runs').innerHTML=html.join('');return busy}
 async function library(){
   let r;try{r=await gh('/releases?per_page=40')}catch(e){$('lib').innerHTML='<p class="sub">Offline or blocked. Retrying…</p>';return}if(!r.ok){$('lib').innerHTML='<p class="sub">Could not load videos.</p>';return}
-  const vids=(await r.json()).filter(x=>x.tag_name.startsWith('video-'));
+  const vids=(await r.json()).filter(x=>x.tag_name.startsWith('video-')).sort((a,b)=>new Date(b.published_at||b.created_at)-new Date(a.published_at||a.created_at));
   if(!vids.length){$('lib').innerHTML='<p class="sub">No videos yet. Make the first one above.</p>';return}
   $('lib').innerHTML=vids.map(v=>{const mp4=v.assets.find(a=>a.name.endsWith('.mp4')),jpg=v.assets.find(a=>a.name.endsWith('.jpg'));if(!mp4)return '';
     const voiced=/voice: voiced/.test(v.body||'');

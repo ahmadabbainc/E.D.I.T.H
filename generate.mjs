@@ -31,9 +31,10 @@ KIT NAMES: ${KIT_NAMES.join(', ')}.
 
 LAYOUT RULES (strict, a linter checks them)
 - Picture area: x 40-536, y 90-740. Never place anything lower than y 740: the caption lives at y 780-880.
-- Centre of the frame is (288, 400). Items must not overlap each other (leave at least 20px between them). Labels sit 80-120px above/below the icon they describe.
+- Centre of the frame is (288, 400). Items must not overlap each other (leave at least 20px between them). Labels sit 110-150px above/below the centre of the icon they describe (more for bigger icons).
 - 2 to 6 items per scene. Stagger "at" by 0.3-0.5s so things build up in the order the sentence says them.
-- Use real hierarchy: one hero icon (size 110-140), supporting items smaller (56-90).
+- Fill the frame like a poster, phone-sized: ONE hero icon at size 170-230 (centred around y 330-430), supporting icons 100-140, tiny accents 60-80. Big and bold beats small and busy. Labels are large text: keep label text under 16 characters and sub under 26; pills under 14 characters.
+- Spread the composition over the picture area (y 100-700); do not leave the lower half of it empty.
 - Scene 1 is a hook (a question or surprising fact). The last scene is a short call to action: "Follow for more ..." with a rocket or star icon and a pill "+ Follow".
 - Use "keep"+ids to build diagrams across scenes (hub-and-spoke, A -> B flows), and "clear" when moving on. Vary the entrance animations. Make it feel alive: use movement "to" for flows, "float" for hero icons.
 - Facts must be accurate and plain-language; explain like to a curious 14 year old.`;
