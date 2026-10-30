@@ -39,18 +39,21 @@ jobs:
         run: |
           node render.mjs "${{ steps.script.outputs.slug }}"
           ffmpeg -v error -ss 1.5 -i "out/${{ steps.script.outputs.slug }}.mp4" -frames:v 1 -vf scale=360:-1 -q:v 3 "out/${{ steps.script.outputs.slug }}.jpg" -y
-      - name: 4. Publish release + save script
+      - name: 4. Publish release (video, poster, script)
         env:
           SLUG: ${{ steps.script.outputs.slug }}
           TITLE: ${{ steps.script.outputs.title }}
         run: |
           VOICE=$([ "${{ steps.voice.outcome }}" = "success" ] && echo voiced || echo silent)
-          gh release create "video-$SLUG-$GITHUB_RUN_NUMBER" "out/$SLUG.mp4" "out/$SLUG.jpg" \
+          cp "videos/$SLUG/video.js" "out/$SLUG.script.js"
+          gh release create "video-$SLUG-$GITHUB_RUN_NUMBER" "out/$SLUG.mp4" "out/$SLUG.jpg" "out/$SLUG.script.js" \
             --title "$TITLE" --notes "topic: $TOPIC
           voice: $VOICE
           seconds: $SECS"
-          git config user.name "explainer-bot"; git config user.email "bot@users.noreply.github.com"
-          git add "videos/$SLUG" videos.json
-          git commit -m "Add video: $TITLE" || true
-          git pull --rebase -q origin main || true
-          git push || true
+      - name: 5. Keep only the newest videos
+        env: { KEEP: "5" }
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
+            --jq '[.[]|select(.tag_name|startswith("video-"))]|sort_by(.published_at)|reverse' \
+          | jq -r --argjson k "$KEEP" '.[$k:][]?|.tag_name' > old.txt || true
+          while read -r t; do [ -n "$t" ] && gh release delete "$t" --cleanup-tag --yes && echo "deleted $t"; done < old.txt || true

@@ -30,3 +30,9 @@ html,body{background:#222;height:100%;overflow:hidden}
 
 .iconbox svg{width:100%;height:100%;display:block;filter:drop-shadow(0 6px 6px rgba(0,0,0,.08))}
 .pill svg{width:22px;height:22px}
+/* external (searched) icons: sticker outline so every icon set looks like one family */
+.iconbox.ext{color:var(--ink)}
+.iconbox.ext svg{width:100%;height:100%;display:block;padding:4%;
+  filter:drop-shadow(2px 0 0 var(--ink)) drop-shadow(-2px 0 0 var(--ink)) drop-shadow(0 2px 0 var(--ink)) drop-shadow(0 -2px 0 var(--ink)) drop-shadow(0 7px 5px rgba(0,0,0,.10))}
+.iconbox.ext.mono svg{filter:none}
+.card svg{width:62%;height:62%}

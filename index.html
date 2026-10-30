@@ -30,7 +30,9 @@ ol{padding-left:20px;margin:6px 0}li{margin:6px 0}a{color:var(--accent)}code{bac
 .vid{background:var(--card);border:1.5px solid var(--ink);border-radius:16px;overflow:hidden}
 .vid video{width:100%;aspect-ratio:9/16;background:#000;display:block;object-fit:cover}
 .vid div{padding:10px 12px;font-size:14px}.vid b{display:block;margin-bottom:2px}.vid small{color:var(--muted)}
-.hidden{display:none}details summary{cursor:pointer;font-weight:600}
+.hidden{display:none}
+.vid .act{display:flex;gap:12px;align-items:center;margin-top:6px}.vid .del{background:none;border:0;color:#c0262d;padding:0;font-weight:600;font-size:14px;cursor:pointer}
+.note{font-size:13px;color:var(--muted);margin:-4px 0 12px}details summary{cursor:pointer;font-weight:600}
 </style></head><body><main>
 <h1>Explainer <span>Engine</span></h1>
 <p class="sub">Type a topic. AI writes the script, a voice reads it, the engine draws and renders the video.</p>
@@ -62,6 +64,7 @@ ol{padding-left:20px;margin:6px 0}li{margin:6px 0}a{color:var(--accent)}code{bac
 <section class="card hidden" id="runsCard"><h2>Progress</h2><div id="runs"></div></section>
 
 <h2 style="font-size:15px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:26px 0 10px">Library</h2>
+<p class="note">Videos are temporary: only the newest 5 are kept, older ones are deleted automatically. Download what you want to keep.</p>
 <div class="grid" id="lib"><p class="sub">Loading…</p></div>
 <p class="sub" style="margin-top:26px"><a href="studio.html">Open the studio</a> (scrub timeline, preview any video in the browser)</p>
 </main>
@@ -108,7 +111,13 @@ async function library(){
   if(!vids.length){$('lib').innerHTML='<p class="sub">No videos yet. Make the first one above.</p>';return}
   $('lib').innerHTML=vids.map(v=>{const mp4=v.assets.find(a=>a.name.endsWith('.mp4')),jpg=v.assets.find(a=>a.name.endsWith('.jpg'));if(!mp4)return '';
     const voiced=/voice: voiced/.test(v.body||'');
-    return `<div class="vid"><video controls preload="none" playsinline ${jpg?`poster="${jpg.browser_download_url}"`:''} src="${mp4.browser_download_url}"></video><div><b>${esc(v.name)}</b><small>${voiced?'with voice':'silent'} · <a href="${mp4.browser_download_url}" download>download</a></small></div></div>`}).join('')}
+    return `<div class="vid"><video controls preload="none" playsinline ${jpg?`poster="${jpg.browser_download_url}"`:''} src="${mp4.browser_download_url}"></video><div><b>${esc(v.name)}</b><small>${voiced?'with voice':'silent'}</small><div class="act"><a href="${mp4.browser_download_url}" download><b style="display:inline">Download</b></a>${token?`<button class="del" data-tag="${esc(v.tag_name)}">Delete</button>`:''}</div></div></div>`}).join('');
+  document.querySelectorAll('.del').forEach(b=>b.onclick=()=>del(b.dataset.tag,b))}
+async function del(tag,btn){
+  if(!confirm('Delete this video permanently? (Download it first if you want to keep it.)'))return;
+  btn.disabled=true;btn.textContent='Deleting…';
+  const r=await gh('/actions/workflows/delete.yml/dispatches',{method:'POST',body:JSON.stringify({ref:'main',inputs:{tag}})});
+  if(r.status===204){btn.closest('.vid').style.opacity=.4;setTimeout(library,20000)}else{btn.disabled=false;btn.textContent='Delete';alert('Could not delete (token needs Actions: Read and write).')}}
 let timer;async function poll(){clearTimeout(timer);let busy=false;try{busy=await runs()}catch(e){}if(!busy)library();timer=setTimeout(poll,busy?7000:60000)}
 refreshUI();poll();
 </script></body></html>

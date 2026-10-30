@@ -39,10 +39,10 @@ export async function load(src){
   function make(it){
     const t=it.type, st=it.style||{};
     let el;
-    if(t==='card'){el=$(`<div class="card">${it.html||(it.kit?kit(it.kit):'')||it.icon||''}</div>`);const z=it.size||90;
+    if(t==='card'){el=$(`<div class="card">${it.html||it.svg||(it.kit?kit(it.kit):'')||it.icon||''}</div>`);const z=it.size||90;
       Object.assign(el.style,{width:z+'px',height:z+'px'});}
     else if(t==='label'){el=$(`<div class="label"><b>${it.text}</b>${it.sub?`<small>${it.sub}</small>`:''}</div>`);}
-    else if(t==='icon'){const z=it.size||90;el=$(`<div class="iconbox" style="width:${z}px;height:${z}px">${kit(it.kit)}</div>`);}
+    else if(t==='icon'){const z=it.size||90;el=$(`<div class="iconbox${it.svg?' ext'+(it.mono?' mono':''):''}" style="width:${z}px;height:${z}px">${it.svg||kit(it.kit)}</div>`);}
     else if(t==='pill'){el=$(`<div class="pill">${it.kit?kit(it.kit):(it.icon||'')}${it.text}</div>`);}
     else if(t==='text'){el=$(`<div class="text" style="font-size:${it.size||40}px;color:${it.color||'var(--ink)'}">${it.text}</div>`);}
     else if(t==='svg'||t==='html'){el=$(`<div>${it.html}</div>`);}
