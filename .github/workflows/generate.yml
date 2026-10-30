@@ -5,7 +5,7 @@ on:
     inputs:
       topic:   { description: "Topic of the explainer", required: true, type: string }
       seconds: { description: "Target length in seconds", default: "60", type: string }
-      voice:   { description: "Gemini voice name", default: "Kore", type: string }
+      voice:   { description: "Gemini voice (Kore, Puck...) or edge:en-US-AndrewNeural", default: "Kore", type: string }
 permissions: { contents: write }
 concurrency: { group: generate, cancel-in-progress: false }
 jobs:
@@ -25,6 +25,9 @@ jobs:
         with: { node-version: 22 }
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-inter
       - run: npm install && npx playwright install --with-deps chromium
+      - name: Free fallback voice (edge-tts)
+        continue-on-error: true
+        run: pip install edge-tts
       - name: 1. AI writes the script
         id: script
         run: node generate.mjs "$TOPIC" --seconds "$SECS"

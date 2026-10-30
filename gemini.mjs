@@ -13,10 +13,11 @@ async function all(key){
 }
 const ver=n=>{const m=n.match(/(\d+)(?:\.(\d+))?/);return m?+m[1]*100+(+(m[2]||0)):0};
 const rank=(a,b)=>ver(b)-ver(a)||(/flash/.test(b)?1:0)-(/flash/.test(a)?1:0)||a.length-b.length;
+const rankText=(a,b)=>(/flash/.test(b)?1:0)-(/flash/.test(a)?1:0)||rank(a,b);
 export async function textModels(key){
   const all_=await all(key);
   const ok=all_.filter(n=>/^gemini/.test(n)&&/(flash|pro)/.test(n)&&!/(tts|image|live|embed|audio|vision|robot|computer|lite|thinking|-exp|customtools|nano|banana|veo|imagen)/.test(n));
-  const stable=ok.filter(n=>!/preview/.test(n)).sort(rank),prev=ok.filter(n=>/preview/.test(n)).sort(rank);
+  const stable=ok.filter(n=>!/preview/.test(n)).sort(rankText),prev=ok.filter(n=>/preview/.test(n)).sort(rankText);
   return [...stable.slice(0,3),...prev.slice(0,2)].slice(0,5);
 }
 export async function ttsModels(key){

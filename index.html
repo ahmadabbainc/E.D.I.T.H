@@ -74,7 +74,7 @@ let token=store.get('ee_token')||'';
 const gh=(path,opt={})=>fetch(path.startsWith('http')?path:API+path,{...opt,headers:{Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28',...(token?{Authorization:'Bearer '+token}:{}),...(opt.headers||{})}});
 $('repoName').textContent=REPO.split('/')[1];
 $('tokenlink').href='https://github.com/settings/personal-access-tokens/new';
-const VOICES=[['Kore','Kore · firm'],['Puck','Puck · upbeat'],['Charon','Charon · informative'],['Fenrir','Fenrir · excitable'],['Aoede','Aoede · breezy'],['Leda','Leda · youthful'],['Zephyr','Zephyr · bright'],['Orus','Orus · firm']];
+const VOICES=[['Kore','Kore · firm'],['Puck','Puck · upbeat'],['Charon','Charon · informative'],['Fenrir','Fenrir · excitable'],['Aoede','Aoede · breezy'],['Leda','Leda · youthful'],['Zephyr','Zephyr · bright'],['Orus','Orus · firm'],['edge:en-US-AndrewNeural','Free · Andrew (US)'],['edge:en-US-AriaNeural','Free · Aria (US)'],['edge:en-US-GuyNeural','Free · Guy (US)'],['edge:en-GB-RyanNeural','Free · Ryan (UK)'],['edge:en-US-AvaNeural','Free · Ava (US)']];
 VOICES.forEach(([v,l])=>$('voice').add(new Option(l,v))); $('voice').value=store.get('ee_voice')||'Kore';
 ['How does Wi-Fi work?','Why is the sky blue?','How do noise-cancelling headphones work?','What is a blockchain?','How does GPS know where you are?'].forEach(t=>{const b=document.createElement('button');b.className='chip';b.textContent=t;b.onclick=()=>{$('topic').value=t};$('chips').append(b)});
 function refreshUI(){const has=!!token;$('setup').classList.toggle('hidden',has);$('create').classList.toggle('hidden',!has)}

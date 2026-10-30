@@ -5,6 +5,7 @@ import fs from 'fs'; import {lint} from './lint.mjs'; import {KIT_NAMES} from '.
 const argv=process.argv.slice(2); const flag=(n,d)=>{const i=argv.indexOf('--'+n);return i>=0?argv[i+1]:d};
 const topic=argv.find((a,i)=>!a.startsWith('--')&&!(argv[i-1]||'').startsWith('--'))||''; if(!topic){console.error('usage: node generate.mjs "topic"');process.exit(1)}
 const seconds=Math.max(20,Math.min(150,+flag('seconds',60))), nScenes=Math.round(seconds/3.6);
+let usedModel=process.env.ANTHROPIC_API_KEY?'claude':'';const T0=Date.now();
 const fail=m=>{console.log('::error::'+String(m).replace(/\s+/g,' ').slice(0,500));process.exit(1)};
 process.on('uncaughtException',e=>fail(e.message)); process.on('unhandledRejection',e=>fail(e&&e.message||e));
 
@@ -40,7 +41,7 @@ const example=fs.readFileSync(new URL('./prompts/example.json',import.meta.url),
 
 async function post(url,headers,body){
   for(let a=0;a<4;a++){
-    const r=await fetch(url,{method:'POST',headers:{'content-type':'application/json',...headers},body:JSON.stringify(body)});
+    const r=await fetch(url,{method:'POST',signal:AbortSignal.timeout(240000),headers:{'content-type':'application/json',...headers},body:JSON.stringify(body)});
     if(r.ok)return r.json(); const t=await r.text();
     if(r.status===429||r.status>=500){await new Promise(s=>setTimeout(s,3000*(a+1)));continue}
     throw new Error(`LLM ${r.status}: ${t.slice(0,300)}`);
@@ -63,7 +64,7 @@ async function ask(messages){ // messages: [{role,content}]
       const j=await post(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`,{'x-goog-api-key':key},
         {systemInstruction:{parts:[{text:SPEC}]},contents:messages.map(x=>({role:x.role==='assistant'?'model':'user',parts:[{text:x.content}]})),
          generationConfig:{responseMimeType:'application/json',temperature:0.8,maxOutputTokens:30000}});
-      const t=j.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join(''); if(t){console.log('using',m);return t} last=new Error('empty response from '+m);
+      const t=j.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join(''); if(t){console.log('using',m);usedModel=m;return t} last=new Error('empty response from '+m);
     }catch(e){last=new Error(`${m}: ${e.message}`); console.log('model failed:',last.message.slice(0,200))}
   } throw last;
 }
@@ -116,4 +117,5 @@ if(issues.length) console.log('remaining issues:\n'+issues.join('\n'));
 const list=fs.existsSync('videos.json')?JSON.parse(fs.readFileSync('videos.json','utf8')):[];
 fs.writeFileSync('videos.json',JSON.stringify([{slug,title:v.title,topic,created:new Date().toISOString()},...list.filter(x=>x.slug!==slug)],null,1));
 console.log(`done: videos/${slug}/video.js — "${v.title}"`);
+console.log(`::notice::script: ${v.scenes.length} scenes, ${issues.length} layout issues left, model ${usedModel||'mock'}, ${Math.round((Date.now()-T0)/1000)}s`);
 if(process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT,`slug=${slug}\ntitle=${v.title.replace(/[\r\n]+/g,' ')}\n`);

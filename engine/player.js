@@ -11,6 +11,7 @@ const $=(h)=>{const d=document.createElement('div');d.innerHTML=h.trim();return 
 export async function load(src){
   const mod=await import(new URL(src,location.href).href+'?v='+Date.now());
   const V=mod.default; try{const r=await fetch(new URL('timings.json',new URL(src,location.href)).href);if(r.ok)V.timings=await r.json()}catch(e){}
+  try{const r=await fetch(new URL('words.json',new URL(src,location.href)).href);if(r.ok)V.wordTimes=await r.json()}catch(e){}
   const stage=document.getElementById('stage');
   stage.style.width=V.width+'px';stage.style.height=V.height+'px';
   const world=document.getElementById('world'), cap=document.getElementById('cap');
@@ -22,6 +23,7 @@ export async function load(src){
     s.dur=s.dur||(V.timings&&V.timings[i])||est; T+=s.dur;
     const tot=ws.reduce((a,w)=>a+w.length+2,0); let c=s.start+0.1;
     s.words=ws.map(w=>{const d=(w.length+2)/tot*(s.dur-0.3);const o={w,t:c};c+=d;return o});
+    const wt=V.wordTimes&&V.wordTimes[i]; if(wt&&wt.length===ws.length) s.words=ws.map((w,k)=>({w,t:s.start+wt[k].t}));
   });
   V.total=T+(V.tail||0.6);
   // ---------- build elements ----------

@@ -2,4 +2,6 @@ node_modules
 out
 videos/*/voice.wav
 videos/*/timings.json
+videos/*/words.json
 videos/*/.tts
+__pycache__
