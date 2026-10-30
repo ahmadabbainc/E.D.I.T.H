@@ -46,7 +46,7 @@ const attempts=[];
 async function post(url,headers,body){
   const t0=Date.now(), tag=(body.model||url.split('/models/')[1]||'').split(':')[0];
   for(let a=0;a<3;a++){
-    let r; try{ r=await fetch(url,{method:'POST',signal:AbortSignal.timeout(150000),headers:{'content-type':'application/json',...headers},body:JSON.stringify(body)}) }
+    let r; try{ r=await fetch(url,{method:'POST',signal:AbortSignal.timeout(100000),headers:{'content-type':'application/json',...headers},body:JSON.stringify(body)}) }
     catch(e){ attempts.push(`${tag}:timeout ${Math.round((Date.now()-t0)/1000)}s`); throw new Error('no answer in time: '+e.message) }
     if(r.ok){ attempts.push(`${tag}:ok ${Math.round((Date.now()-t0)/1000)}s`); return r.json() }
     const t=await r.text();
@@ -62,18 +62,28 @@ async function ask(messages,SYS=SPEC){ // messages: [{role,content}]
     return j.content.map(c=>c.text||'').join('');
   }
   const key=process.env.GEMINI_API_KEY; if(!key) throw new Error('Set GEMINI_API_KEY (or ANTHROPIC_API_KEY) as a repository secret');
-  const models=process.env.GEMINI_TEXT_MODEL?[process.env.GEMINI_TEXT_MODEL]:await textModels(key);
-  if(!models.length) throw new Error('No usable Gemini text model. Available: '+await modelNames(key));
-  console.log('text models to try:',models.join(', '));
+  const all=process.env.GEMINI_TEXT_MODEL?[process.env.GEMINI_TEXT_MODEL]:await textModels(key);
+  if(!all.length) throw new Error('No usable Gemini text model. Available: '+await modelNames(key));
+  globalThis.__bad=globalThis.__bad||new Set();
+  const order=[...(globalThis.__good?[globalThis.__good]:[]),...all.filter(m=>m!==globalThis.__good&&!globalThis.__bad.has(m))];
+  if(!order.length) order.push(...all);
   let last;
-  for(const m of models){
-    try{
-      const j=await post(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`,{'x-goog-api-key':key},
-        {systemInstruction:{parts:[{text:SYS}]},contents:messages.map(x=>({role:x.role==='assistant'?'model':'user',parts:[{text:x.content}]})),
-         generationConfig:{responseMimeType:'application/json',temperature:0.8,maxOutputTokens:30000}});
-      const t=j.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join(''); if(t){console.log('using',m);usedModel=m;return t} last=new Error('empty response from '+m);
-    }catch(e){last=new Error(`${m}: ${e.message}`); console.log('model failed:',last.message.slice(0,200))}
-  } throw last;
+  for(const m of order){
+    for(const think of [true,false]){ // first try with thinking switched off (much faster); some models reject that option
+      try{
+        const gc={responseMimeType:'application/json',temperature:0.8,maxOutputTokens:30000}; if(think)gc.thinkingConfig={thinkingBudget:0};
+        const j=await post(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`,{'x-goog-api-key':key},
+          {systemInstruction:{parts:[{text:SYS}]},contents:messages.map(x=>({role:x.role==='assistant'?'model':'user',parts:[{text:x.content}]})),generationConfig:gc});
+        const t=j.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('');
+        if(t){console.log('using',m);usedModel=m;globalThis.__good=m;return t}
+        last=new Error('empty response from '+m); globalThis.__bad.add(m); break;
+      }catch(e){
+        if(think&&/ 400/.test(e.message)&&/think/i.test(e.message))continue;
+        last=new Error(`${m}: ${e.message}`); console.log('model failed:',last.message.slice(0,200)); globalThis.__bad.add(m); break;
+      }
+    }
+  }
+  throw last;
 }
 const parse=t=>{t=t.trim().replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();const a=t.indexOf('{'),b=t.lastIndexOf('}');return JSON.parse(t.slice(a,b+1))};
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v)), num=(v,d)=>Number.isFinite(+v)?+v:d;
