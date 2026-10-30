@@ -4,7 +4,7 @@ You build vertical (576x1024, 30fps) explainer motion videos purely from code.
 
 ## To make a new video
 1. `mkdir videos/<name>` and write `videos/<name>/video.js` (copy `videos/browser-engines/video.js`).
-2. Add `<name>` to the `list` array in `index.html`.
+2. Add `{slug,title,topic}` for it to `videos.json` (the studio dropdown reads it).
 3. Preview: `npm run dev` -> http://localhost:5173/?v=<name> (scrub the timeline).
 4. Render: `npm run render <name>` -> `out/<name>.mp4`.
 5. Look at 3-4 frames (ffmpeg -ss T -frames:v 1) BEFORE the full render; fix overlaps.
@@ -21,11 +21,11 @@ Item = `{ id?, type, x, y, at, enter, keep?, until?, float?, to?:[{at,dur,x,y,sc
 - Style lives in `engine/style.css` (6 CSS variables). Everything is deterministic: seek(t) -> pixels.
 
 ## Voice / music
-Drop `voice.mp3` (and/or `music.mp3`) in the video folder; render.mjs muxes it. Set `timings` so scenes match the audio.
+`node tts.mjs <name>` writes voice.wav + timings.json (+ words.json) and render.mjs muxes them. Or drop your own voice.mp3/music.mp3 in the video folder.
 
 ## Icon kit
 `engine/kit.js` has flat icons (laptop, phone, server, database, cloud, globe, lock, key, gear, chip, document, folder, person, search, bolt, code, shield, bulb, clock, coin, check, cross, question, arrow, wifi, mail, chat, cursor, stack, cube, rocket, star, heart, camera, tower, truck, bug). Use `{type:"icon",kit:"laptop"}`. Add new ones in the same style.
 
 ## AI generation pipeline
-Web page (index.html) -> dispatches `.github/workflows/generate.yml` -> `generate.mjs` (LLM writes scenes JSON from `prompts/example.json` style + spec, `lint.mjs` checks overlaps and the LLM repairs) -> `tts.mjs` (Gemini voice) -> `render.mjs` -> GitHub Release (mp4 + jpg). Secrets: GEMINI_API_KEY (required), ANTHROPIC_API_KEY (optional, better scripts).
+Web page (index.html) -> dispatches `.github/workflows/generate.yml` -> `generate.mjs` (LLM writes scenes JSON from `prompts/example.json` style + spec, `lint.mjs` checks overlaps and the LLM repairs) -> `tts.mjs` (Gemini voice, falls back to free Edge voice) -> `render.mjs` -> GitHub Release (mp4 + jpg). Secrets: GEMINI_API_KEY (required), ANTHROPIC_API_KEY (optional, better scripts).
 Local: `node generate.mjs "topic" --seconds 60` then `node lint.mjs <slug>`.
