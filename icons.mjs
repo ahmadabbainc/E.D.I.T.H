@@ -47,14 +47,14 @@ export async function resolveIcon(terms,{brand=false}={}){
 // Returns {report, missing:[{it,terms}]}; unresolved items keep their find list.
 export async function resolveAll(video,alts={}){
   const jobs=[]; for(const s of video.scenes) for(const it of s.items){
-    if((it.type==='icon'||it.type==='card')&&(it.find||it.brand)&&!it.svg) jobs.push(it);
+    if((it.type==='icon'||it.type==='card')&&(it.find||it.brand)&&!it.svg&&!it._label) jobs.push(it);
   }
   const report=[],missing=[]; let i=0;
   async function worker(){while(i<jobs.length){const it=jobs[i++];
     const base=it.brand?[it.brand,...(it.find||[])]:[...(it.find||[])];
     const extra=base.flatMap(t=>alts[String(t).toLowerCase()]||[]);
     const terms=[...base,...extra].slice(0,8); const hit=await resolveIcon(terms,{brand:!!it.brand});
-    if(hit){it.svg=uniq(hit.svg,++counter); if(hit.mono)it.mono=true; report.push(`${base[0]}→${hit.id}`); delete it.find; delete it.brand}
+    if(hit){it.svg=uniq(hit.svg,++counter); it._term=base[0]; it._id=hit.id; if(hit.mono)it.mono=true; report.push(`${base[0]}→${hit.id}`); delete it.find; delete it.brand}
     else{ report.push(`${base[0]}→MISSING`); missing.push({it,terms:base}) }
   }}
   await Promise.all(Array.from({length:5},worker)); return {report,missing};

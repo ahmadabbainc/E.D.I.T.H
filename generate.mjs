@@ -1,7 +1,7 @@
 // node generate.mjs "How DNS works" [--seconds 60] [--slug my-slug] [--mock file.json]
 // Topic -> AI writes the scene JSON -> validate -> lint layout -> auto-repair -> videos/<slug>/video.js
 // Needs GEMINI_API_KEY (default) or ANTHROPIC_API_KEY (better scripts, used first if present).
-import fs from 'fs'; import {lint} from './lint.mjs'; import {KIT_NAMES} from './engine/kit.js'; import {textModels,modelNames} from './gemini.mjs'; import {resolveAll,labelFallback} from './icons.mjs';
+import fs from 'fs'; import {lint} from './lint.mjs'; import {KIT_NAMES} from './engine/kit.js'; import {textModels,modelNames} from './gemini.mjs'; import {resolveAll,labelFallback} from './icons.mjs'; import {shots} from './iconshots.mjs';
 const argv=process.argv.slice(2); const flag=(n,d)=>{const i=argv.indexOf('--'+n);return i>=0?argv[i+1]:d};
 const topic=argv.find((a,i)=>!a.startsWith('--')&&!(argv[i-1]||'').startsWith('--'))||''; if(!topic){console.error('usage: node generate.mjs "topic"');process.exit(1)}
 const seconds=Math.max(20,Math.min(150,+flag('seconds',60))), nScenes=Math.round(seconds/3.6);
@@ -20,7 +20,7 @@ FORMAT
 
 ITEMS (all coordinates are the CENTRE of the item, in pixels)
 - {"type":"icon","find":["satellite","space"],"size":100-230,"x":..,"y":..}   THE REAL THING. "find" = 1-3 search words for an icon library (200k icons: emoji, objects, devices, vehicles, animals, nature, buildings, people, tools, food, planets, symbols), most specific first, lowercase singular nouns ("satellite", "gps tower", "atomic clock", "headphones", "cell tower"). For a company/product logo use "brand":"firefox" (also "google", "chrome", "github", "openai"...).
-  EVERY physical thing you mention must show that exact thing, never a stand-in (a satellite must be a satellite, not a star or a globe). Use "kit" only for abstract symbols.
+  EVERY physical thing you mention must show that exact thing, never a stand-in (a satellite must be a satellite, not a star or a globe). If a very specific part has no common icon (e.g. magnetron), search the closest REAL thing that contains it ("microwave") or use a text label; NEVER search a word that means something different ("engine" for a magnetron gives a fire engine). Every find word must literally name the thing. Use "kit" only for abstract symbols.
 - {"type":"icon","kit":"<name>",...}   hand-drawn abstract symbols ONLY: arrow, check, cross, question, bolt, wifi, lock, shield, clock, coin, code, cursor, stack, cube, rocket, heart, star.
 - {"type":"card","find":[..]|"brand":".."|"kit":"<name>","size":70-110,...}   the icon inside a rounded app-style tile (best for brands/apps; "text" is not supported, use "icon" with a short word like "G" via {"type":"card","html":"<b style='font-size:40px'>G</b>"} only if needed).
 - {"type":"label","text":"Title","sub":"small caption"}   boxed callout. Keep text under 22 chars, sub under 32.
@@ -58,7 +58,7 @@ async function ask(messages,SYS=SPEC){ // messages: [{role,content}]
   if(flag('mock')) return fs.readFileSync(flag('mock'),'utf8');
   if(process.env.ANTHROPIC_API_KEY){
     const j=await post('https://api.anthropic.com/v1/messages',{'x-api-key':process.env.ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01'},
-      {model:process.env.ANTHROPIC_MODEL||'claude-sonnet-5-5',max_tokens:16000,system:SYS,messages});
+      {model:process.env.ANTHROPIC_MODEL||'claude-sonnet-5-5',max_tokens:16000,system:SYS,messages:messages.map(m=>({role:m.role,content:typeof m.content==='string'?m.content:m.content.map(p=>p.img?{type:'image',source:{type:'base64',media_type:'image/png',data:p.img}}:{type:'text',text:p.text})}))});
     return j.content.map(c=>c.text||'').join('');
   }
   const key=process.env.GEMINI_API_KEY; if(!key) throw new Error('Set GEMINI_API_KEY (or ANTHROPIC_API_KEY) as a repository secret');
@@ -72,7 +72,7 @@ async function ask(messages,SYS=SPEC){ // messages: [{role,content}]
       try{
         const gc={responseMimeType:'application/json',temperature:0.8,maxOutputTokens:30000}; if(think)gc.thinkingConfig={thinkingBudget:0};
         const j=await post(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`,{'x-goog-api-key':key},
-          {systemInstruction:{parts:[{text:SYS}]},contents:messages.map(x=>({role:x.role==='assistant'?'model':'user',parts:[{text:x.content}]})),generationConfig:gc});
+          {systemInstruction:{parts:[{text:SYS}]},contents:messages.map(x=>({role:x.role==='assistant'?'model':'user',parts:typeof x.content==='string'?[{text:x.content}]:x.content.map(p=>p.img?{inlineData:{mimeType:'image/png',data:p.img}}:{text:p.text})})),generationConfig:gc});
         const t=j.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('');
         if(t)return {t,m}; throw new Error('empty response');
       }catch(e){
@@ -118,8 +118,21 @@ function normalize(v){
   for(const s of out.scenes) s.items=s.items.filter(i=>i.type!=='line'||((!i.from&&i.x1!==undefined)||ids.has(i.from))&&((!i.toId&&i.x2!==undefined)||ids.has(i.toId)));
   return out;
 }
+async function verifyIcons(v){
+  const list=[]; v.scenes.forEach(s=>s.items.forEach(it=>{ if(it.svg&&it._term&&list.length<30) list.push({it,say:s.say}) }));
+  if(!list.length) return 0;
+  const imgs=await shots(list.map(x=>x.it.svg));
+  const parts=[{text:'Check icons for an explainer video. For each numbered icon image below, decide whether it clearly depicts the WANTED thing (an obviously fitting depiction counts; a different object does not, e.g. a fire engine is not a magnetron, an ice cube is not a metal wall). Return ONLY a JSON array like [{"i":0,"ok":true},{"i":1,"ok":false,"better":["microwave oven","radio tower"]}]. For not-ok icons, "better" lists up to 3 alternative search words for icons that WOULD really depict the wanted thing (empty array if no icon could).'}];
+  list.forEach((x,i)=>{parts.push({text:`Icon ${i}: wanted "${x.it._term}"; the narration says: "${x.say}"`});parts.push({img:imgs[i]})});
+  const raw=await ask([{role:'user',content:parts}],'You are a strict icon checker. Output only JSON.');
+  const a=raw.indexOf('['),b=raw.lastIndexOf(']'); const arr=JSON.parse(raw.slice(a,b+1)); let bad=0;
+  for(const r of arr){ const x=list[r.i]; if(!x||r.ok!==false)continue; bad++;
+    const it=x.it; delete it.svg; delete it.mono; const better=(r.better||[]).map(String).slice(0,3);
+    if(better.length){it.find=better}else{it.find=[it._term];it._label=true} }
+  return bad;
+}
 const slugify=t=>t.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,40)||'video';
-const write=(slug,v)=>{fs.mkdirSync(`videos/${slug}`,{recursive:true});fs.writeFileSync(`videos/${slug}/video.js`,`// Generated from topic: ${JSON.stringify(topic)}\nexport default ${JSON.stringify(v,null,1)};\n`)};
+const write=(slug,v)=>{fs.mkdirSync(`videos/${slug}`,{recursive:true});fs.writeFileSync(`videos/${slug}/video.js`,`// Generated from topic: ${JSON.stringify(topic)}\nexport default ${JSON.stringify(v,(k,x)=>k.startsWith('_')?undefined:x,1)};\n`)};
 
 let slug=flag('slug')||slugify(topic); if(!flag('slug')){let n=2,b=slug;while(fs.existsSync(`videos/${slug}`))slug=`${b}-${n++}`}
 const first=`Topic: ${topic}\nTarget length: about ${seconds} seconds = ${nScenes} scenes.\n\nHere is an example of the quality and style expected (different topic):\n${example}\n\nNow write the JSON for the topic above.`;
@@ -136,6 +149,8 @@ for(let round=0;round<3;round++){
       const r2=await resolveAll(v,alts); rep=[...rep.filter(x=>!x.endsWith('MISSING')),...r2.report]; missing=r2.missing;
     }catch(e){console.log('icon rescue failed:',e.message)}
   }
+  try{ for(let k=0;k<2;k++){ const bad=await verifyIcons(v); if(!bad)break; rep.push(`vision check replaced ${bad}`); const r3=await resolveAll(v); rep.push(...r3.report) } }
+  catch(e){console.log('icon vision check skipped:',e.message.slice(0,200))}
   const lab=labelFallback(v); if(lab)rep.push(`${lab} shown as text labels`); iconReport=rep; iconSecs=Math.round((Date.now()-tI)/1000);
   write(slug,v); issues=await lint(slug);
   console.log(`${v.scenes.length} scenes, ${issues.length} layout issues`);
