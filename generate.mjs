@@ -42,12 +42,16 @@ LAYOUT RULES (strict, a linter checks them)
 - Facts must be accurate and plain-language; explain like to a curious 14 year old.`;
 const example=fs.readFileSync(new URL('./prompts/example.json',import.meta.url),'utf8');
 
+const attempts=[];
 async function post(url,headers,body){
-  for(let a=0;a<4;a++){
-    const r=await fetch(url,{method:'POST',signal:AbortSignal.timeout(240000),headers:{'content-type':'application/json',...headers},body:JSON.stringify(body)});
-    if(r.ok)return r.json(); const t=await r.text();
-    if(r.status===429||r.status>=500){await new Promise(s=>setTimeout(s,3000*(a+1)));continue}
-    throw new Error(`LLM ${r.status}: ${t.slice(0,300)}`);
+  const t0=Date.now(), tag=(body.model||url.split('/models/')[1]||'').split(':')[0];
+  for(let a=0;a<3;a++){
+    let r; try{ r=await fetch(url,{method:'POST',signal:AbortSignal.timeout(150000),headers:{'content-type':'application/json',...headers},body:JSON.stringify(body)}) }
+    catch(e){ attempts.push(`${tag}:timeout ${Math.round((Date.now()-t0)/1000)}s`); throw new Error('no answer in time: '+e.message) }
+    if(r.ok){ attempts.push(`${tag}:ok ${Math.round((Date.now()-t0)/1000)}s`); return r.json() }
+    const t=await r.text();
+    if((r.status===429||r.status>=500)&&a<2){ await new Promise(s=>setTimeout(s,4000*(a+1))); continue }
+    attempts.push(`${tag}:${r.status}`); throw new Error(`LLM ${r.status}: ${t.slice(0,300)}`);
   } throw new Error('LLM failed after retries');
 }
 async function ask(messages,SYS=SPEC){ // messages: [{role,content}]
@@ -132,5 +136,6 @@ const list=fs.existsSync('videos.json')?JSON.parse(fs.readFileSync('videos.json'
 fs.writeFileSync('videos.json',JSON.stringify([{slug,title:v.title,topic,created:new Date().toISOString()},...list.filter(x=>x.slug!==slug)],null,1));
 console.log(`done: videos/${slug}/video.js — "${v.title}"`);
 console.log(`::notice::icons (${iconSecs}s last round): ${iconReport.join(', ').slice(0,900)}`);
+console.log(`::notice::llm calls: ${attempts.join(', ').slice(0,400)}`);
 console.log(`::notice::script: ${v.scenes.length} scenes, ${issues.length} layout issues left, model ${usedModel||'mock'}, ${Math.round((Date.now()-T0)/1000)}s`);
 if(process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT,`slug=${slug}\ntitle=${v.title.replace(/[\r\n]+/g,' ')}\n`);

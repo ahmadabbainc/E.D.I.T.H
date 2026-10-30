@@ -18,6 +18,10 @@ async function search(term,prefixes){
   return (j.icons||[]).map((id,i)=>{const [p,n]=id.split(':');const tier=prefixes.indexOf(p);
     return {id,p,n,score:(tier<0?99:tier)*100+(n===want?-50:n.startsWith(want)?-25:n.includes(want)?-10:0)+i*0.1}}).sort((a,b)=>a.score-b.score);
 }
+// An icon is only accepted if its name shares a real word with the search term (no 'cannon' -> 'chemical-weapon').
+const relevant=(term,name)=>{const tok=name.toLowerCase().split(/[-_\d]+/).filter(Boolean);
+  const words=term.toLowerCase().split(/[\s-]+/).filter(w=>w.length>2);
+  return words.some(w=>tok.includes(w)||tok.includes(w.replace(/s$/,''))||tok.some(t=>t.length>3&&w.length>3&&(t.startsWith(w)||w.startsWith(t))))};
 const uniq=(svg,k)=>{const ids=[...svg.matchAll(/\sid="([^"]+)"/g)].map(m=>m[1]); let o=svg;
   for(const id of ids){const n=`i${k}_${id}`;o=o.split(`id="${id}"`).join(`id="${n}"`).split(`url(#${id})`).join(`url(#${n})`).split(`href="#${id}"`).join(`href="#${n}"`)}
   return o};
@@ -31,7 +35,7 @@ export async function resolveIcon(terms,{brand=false}={}){
   const tiers=brand?[BRAND,COLORED,MONO,[]]:[COLORED,MONO,[]]; let hit=null;
   outer: for(const tier of tiers) for(const t of terms){
     const res=await search(t,tier); if(!res.length)continue;
-    for(const c of res.slice(0,3)){
+    for(const c of res.filter(c=>relevant(t,c.n)).slice(0,3)){
       const r=await get(`${API}/${c.p}/${c.n}.svg`); if(!r)continue;
       const svg=await r.text(); if(!/^<svg/i.test(svg.trim()))continue;
       hit={id:c.id,term:t,svg:clean(svg.trim()),mono:MONO.includes(c.p)||c.p==='simple-icons'}; break outer;
