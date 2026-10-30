@@ -67,23 +67,25 @@ async function ask(messages,SYS=SPEC){ // messages: [{role,content}]
   globalThis.__bad=globalThis.__bad||new Set();
   const order=[...(globalThis.__good?[globalThis.__good]:[]),...all.filter(m=>m!==globalThis.__good&&!globalThis.__bad.has(m))];
   if(!order.length) order.push(...all);
-  let last;
-  for(const m of order){
+  const attempt=async(m)=>{
     for(const think of [true,false]){ // first try with thinking switched off (much faster); some models reject that option
       try{
         const gc={responseMimeType:'application/json',temperature:0.8,maxOutputTokens:30000}; if(think)gc.thinkingConfig={thinkingBudget:0};
         const j=await post(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`,{'x-goog-api-key':key},
           {systemInstruction:{parts:[{text:SYS}]},contents:messages.map(x=>({role:x.role==='assistant'?'model':'user',parts:[{text:x.content}]})),generationConfig:gc});
         const t=j.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('');
-        if(t){console.log('using',m);usedModel=m;globalThis.__good=m;return t}
-        last=new Error('empty response from '+m); globalThis.__bad.add(m); break;
+        if(t)return {t,m}; throw new Error('empty response');
       }catch(e){
         if(think&&/ 400/.test(e.message)&&/think/i.test(e.message))continue;
-        last=new Error(`${m}: ${e.message}`); console.log('model failed:',last.message.slice(0,200)); globalThis.__bad.add(m); break;
+        globalThis.__bad.add(m); throw new Error(`${m}: ${e.message}`);
       }
     }
-  }
-  throw last;
+  };
+  // Race the best candidates in parallel (some models hang for minutes at random); first answer wins.
+  const racers=globalThis.__good?[globalThis.__good]:order.slice(0,3);
+  let win; try{ win=await Promise.any(racers.map(attempt)) }
+  catch(e){ const rest=order.filter(m=>!racers.includes(m)); win=null; for(const m of rest){ try{win=await attempt(m);break}catch(_){} } if(!win) throw new Error((e.errors||[e]).map(x=>x.message).join(' | ').slice(0,300)) }
+  console.log('using',win.m); usedModel=win.m; globalThis.__good=win.m; return win.t;
 }
 const parse=t=>{t=t.trim().replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();const a=t.indexOf('{'),b=t.lastIndexOf('}');return JSON.parse(t.slice(a,b+1))};
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v)), num=(v,d)=>Number.isFinite(+v)?+v:d;
@@ -149,3 +151,4 @@ console.log(`::notice::icons (${iconSecs}s last round): ${iconReport.join(', ').
 console.log(`::notice::llm calls: ${attempts.join(', ').slice(0,400)}`);
 console.log(`::notice::script: ${v.scenes.length} scenes, ${issues.length} layout issues left, model ${usedModel||'mock'}, ${Math.round((Date.now()-T0)/1000)}s`);
 if(process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT,`slug=${slug}\ntitle=${v.title.replace(/[\r\n]+/g,' ')}\n`);
+process.exit(0);

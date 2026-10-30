@@ -21,7 +21,7 @@ async function search(term,prefixes){
 // An icon is only accepted if its name shares a real word with the search term (no 'cannon' -> 'chemical-weapon').
 const relevant=(term,name)=>{const tok=name.toLowerCase().split(/[-_\d]+/).filter(Boolean);
   const words=term.toLowerCase().split(/[\s-]+/).filter(w=>w.length>2);
-  return words.some(w=>tok.includes(w)||tok.includes(w.replace(/s$/,''))||tok.some(t=>t.length>3&&w.length>3&&(t.startsWith(w)||w.startsWith(t))))};
+  return words.some(w=>tok.includes(w)||tok.includes(w.replace(/s$/,''))||tok.some(t=>t.length>3&&w.length>3&&Math.abs(t.length-w.length)<=2&&(t.startsWith(w)||w.startsWith(t))))};
 const uniq=(svg,k)=>{const ids=[...svg.matchAll(/\sid="([^"]+)"/g)].map(m=>m[1]); let o=svg;
   for(const id of ids){const n=`i${k}_${id}`;o=o.split(`id="${id}"`).join(`id="${n}"`).split(`url(#${id})`).join(`url(#${n})`).split(`href="#${id}"`).join(`href="#${n}"`)}
   return o};
