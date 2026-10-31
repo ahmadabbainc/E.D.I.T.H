@@ -25,3 +25,9 @@ export async function ttsModels(key){
   return all_.filter(n=>/tts/.test(n)).sort(rank).slice(0,4);
 }
 export async function modelNames(key){return (await all(key)).join(', ')}
+
+// Image-capable models (generateContent that can return pictures).
+export async function imageModels(key){
+  const all_=await all(key);
+  return all_.filter(n=>/image/.test(n)&&!/imagen/.test(n)).sort(rank).slice(0,4);
+}
