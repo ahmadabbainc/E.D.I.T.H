@@ -44,7 +44,7 @@ export async function load(src){
       Object.assign(el.style,{width:z+'px',height:z+'px'});}
     else if(t==='label'){el=$(`<div class="label"><b>${it.text}</b>${it.sub?`<small>${it.sub}</small>`:''}</div>`);}
     else if(t==='icon'){const z=it.size||90;el=$(`<div class="iconbox${it.svg?' ext'+(it.mono?' mono':''):''}" style="width:${z}px;height:${z}px">${it.svg||kit(it.kit)}</div>`);}
-    else if(t==='iso'){const z=it.size||220;el=$(`<div class="isobox" style="width:${z}px;height:${z}px">${asset(it.asset,it)}</div>`);el.firstChild&&(el.firstChild.style.cssText='width:100%;height:100%;overflow:visible');}
+    else if(t==='iso'){const z=Math.round((it.size||260)*1.35);el=$(`<div class="isobox" style="width:${z}px;height:${z}px">${asset(it.asset,it)}</div>`);el.firstChild&&(el.firstChild.style.cssText='width:100%;height:100%;overflow:visible');}
     else if(t==='pill'){el=$(`<div class="pill">${it.kit?kit(it.kit):(it.icon||'')}${it.text}</div>`);}
     else if(t==='text'){el=$(`<div class="text" style="font-size:${it.size||40}px;color:${it.color||'var(--ink)'}">${it.text}</div>`);}
     else if(t==='svg'||t==='html'){el=$(`<div>${it.html}</div>`);}
