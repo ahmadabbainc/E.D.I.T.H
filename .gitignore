@@ -5,3 +5,4 @@ videos/*/timings.json
 videos/*/words.json
 videos/*/.tts
 __pycache__
+engine/_preview.html

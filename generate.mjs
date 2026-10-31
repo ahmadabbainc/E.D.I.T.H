@@ -1,7 +1,7 @@
 // node generate.mjs "How DNS works" [--seconds 60] [--slug my-slug] [--mock file.json]
 // Topic -> AI writes the scene JSON -> validate -> lint layout -> auto-repair -> videos/<slug>/video.js
 // Needs GEMINI_API_KEY (default) or ANTHROPIC_API_KEY (better scripts, used first if present).
-import fs from 'fs'; import {lint} from './lint.mjs'; import {KIT_NAMES} from './engine/kit.js'; import {textModels,modelNames} from './gemini.mjs'; import {resolveAll,labelFallback} from './icons.mjs'; import {shots} from './iconshots.mjs';
+import fs from 'fs'; import {lint} from './lint.mjs'; import {KIT_NAMES} from './engine/kit.js'; import {ISO_NAMES} from './engine/iso-assets.js'; import {textModels,modelNames} from './gemini.mjs'; import {resolveAll,labelFallback} from './icons.mjs'; import {shots} from './iconshots.mjs';
 const argv=process.argv.slice(2); const flag=(n,d)=>{const i=argv.indexOf('--'+n);return i>=0?argv[i+1]:d};
 const topic=argv.find((a,i)=>!a.startsWith('--')&&!(argv[i-1]||'').startsWith('--'))||''; if(!topic){console.error('usage: node generate.mjs "topic"');process.exit(1)}
 const seconds=Math.max(20,Math.min(150,+flag('seconds',60))), nScenes=Math.round(seconds/3.6);
@@ -9,7 +9,7 @@ let iconSecs=0,iconReport=[],usedModel=process.env.ANTHROPIC_API_KEY?'claude':''
 const fail=m=>{console.log('::error::'+String(m).replace(/\s+/g,' ').slice(0,500));process.exit(1)};
 process.on('uncaughtException',e=>fail(e.message)); process.on('unhandledRejection',e=>fail(e&&e.message||e));
 
-const TYPES=['icon','card','label','pill','text','line','box3d','svg'], ENTER=['pop','fade','rise','left','right','draw','none'];
+const TYPES=['iso','icon','card','label','pill','text','line','box3d','svg'], ENTER=['pop','fade','rise','left','right','draw','none'];
 const SPEC=`You are a motion-graphics director writing a vertical (576x1024) explainer video as JSON. Output ONLY one JSON object, no prose, no code fences.
 
 FORMAT
@@ -19,6 +19,7 @@ FORMAT
 - "camera" is optional (slow push-in on 1 in 3 scenes is nice; z between 1 and 1.2, keep x 288 and y 380-440).
 
 ITEMS (all coordinates are the CENTRE of the item, in pixels)
+- {"type":"iso","asset":"<name>","size":260-360,...}   DETAILED ISOMETRIC 3D ILLUSTRATION (the reference look). PREFER THIS whenever one of these fits: ${ISO_NAMES.join(', ')}. Optional: "screen":"browser|code|chat|dashboard|video|apps" (laptop/monitor/phone/browser show that UI), "n":1-12 (stack = sheets, machine items), "lines":["Title","line"] (document), "layout":true (browser wireframe). Use iso for the hero and key devices; use find icons for everything else.
 - {"type":"icon","find":["satellite","space"],"size":100-230,"x":..,"y":..}   THE REAL THING. "find" = 1-3 search words for an icon library (200k icons: emoji, objects, devices, vehicles, animals, nature, buildings, people, tools, food, planets, symbols), most specific first, lowercase singular nouns ("satellite", "gps tower", "atomic clock", "headphones", "cell tower"). For a company/product logo use "brand":"firefox" (also "google", "chrome", "github", "openai"...).
   EVERY physical thing you mention must show that exact thing, never a stand-in (a satellite must be a satellite, not a star or a globe). If a very specific part has no common icon (e.g. magnetron), search the closest REAL thing that contains it ("microwave") or use a text label; NEVER search a word that means something different ("engine" for a magnetron gives a fire engine). Every find word must literally name the thing. Use "kit" only for abstract symbols.
 - {"type":"icon","kit":"<name>",...}   hand-drawn abstract symbols ONLY: arrow, check, cross, question, bolt, wifi, lock, shield, clock, coin, code, cursor, stack, cube, rocket, heart, star.
@@ -100,6 +101,10 @@ function normalize(v){
     const c=s.camera; if(c&&c.from&&c.to)sc.camera={from:{x:num(c.from.x,288),y:num(c.from.y,400),z:clamp(num(c.from.z,1),.8,1.5)},to:{x:num(c.to.x,288),y:num(c.to.y,400),z:clamp(num(c.to.z,1),.8,1.5)}};
     for(const it of (s.items||[])){
       if(!TYPES.includes(it.type))continue; const o={type:it.type};
+      if(it.type==='iso'){ if(!ISO_NAMES.includes(it.asset)) continue; o.asset=it.asset;
+        if(['browser','chat','dashboard','code','video','apps'].includes(it.screen)) o.screen=it.screen;
+        if(it.n!==undefined) o.n=clamp(num(it.n,4),1,12); if(it.layout) o.layout=true;
+        if(Array.isArray(it.lines)) o.lines=it.lines.slice(0,5).map(x=>String(x).slice(0,18)); if(it.text) o.text=String(it.text).slice(0,24); }
       for(const k of ['id','kit','text','sub','color','icon']) if(it[k]!==undefined) o[k]=String(it[k]);
       if(o.kit&&!KIT_NAMES.includes(o.kit)){ if(!it.find&&!it.brand) it.find=[o.kit]; delete o.kit }
       const fl=v=>(Array.isArray(v)?v:[v]).map(x=>String(x).trim().slice(0,40)).filter(Boolean).slice(0,4);

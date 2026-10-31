@@ -29,3 +29,6 @@ Item = `{ id?, type, x, y, at, enter, keep?, until?, float?, to?:[{at,dur,x,y,sc
 ## AI generation pipeline
 Web page (index.html) -> dispatches `.github/workflows/generate.yml` -> `generate.mjs` (LLM writes scenes JSON from `prompts/example.json` style + spec, `lint.mjs` checks overlaps and the LLM repairs) -> `tts.mjs` (Gemini voice, falls back to free Edge voice) -> `render.mjs` -> GitHub Release (mp4 + jpg). Secrets: GEMINI_API_KEY (required), ANTHROPIC_API_KEY (optional, better scripts).
 Local: `node generate.mjs "topic" --seconds 60` then `node lint.mjs <slug>`.
+
+## Isometric assets
+`engine/iso-assets.js` draws detailed isometric objects in code (laptop, phone, monitor, browser, document, stack, chip, server, machine, database, router, satellite, solar, package). Use `{type:"iso",asset:"laptop",screen:"code",size:240}`. Add new ones in the same file using `Sc`/`Plane` from `engine/iso.js`.
